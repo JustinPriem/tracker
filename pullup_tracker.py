@@ -32,20 +32,17 @@ MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
-MIN_CIRCLE_RADIUS = 7
-MAX_CIRCLE_RADIUS = 17
-EMPTY_CIRCLE_RADIUS = 5
+MIN_CIRCLE_RADIUS = 13
+MAX_CIRCLE_RADIUS = 20
 
-CELL_SIZE = 42
+CELL_SIZE = 46
 HEADER_HEIGHT = 22
 CANVAS_WIDTH = CELL_SIZE * 7
 
 
 def value_to_radius(value: int, max_value: int) -> int:
     """Bestimmt den Kreisradius abhaengig von der Tages-Anzahl."""
-    if not value:
-        return EMPTY_CIRCLE_RADIUS
-    if max_value <= 0:
+    if not value or max_value <= 0:
         return MIN_CIRCLE_RADIUS
     ratio = min(value / max_value, 1)
     return round(MIN_CIRCLE_RADIUS + ratio * (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS))
@@ -122,7 +119,30 @@ class HistoryWindow(tk.Toplevel):
         self.summary_label = ttk.Label(self, text="", font=("Segoe UI", 10))
         self.summary_label.pack(pady=(0, 10))
 
+        self._tooltip: Optional[tk.Toplevel] = None
+        self.bind("<Destroy>", lambda e: self._hide_tooltip())
+
         self.refresh()
+
+    def _show_tooltip(self, event: tk.Event, text: str) -> None:
+        self._hide_tooltip()
+        self._tooltip = tk.Toplevel(self)
+        self._tooltip.wm_overrideredirect(True)
+        self._tooltip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 10}")
+        tk.Label(
+            self._tooltip,
+            text=text,
+            background="#333333",
+            foreground="white",
+            font=("Segoe UI", 8),
+            padx=6,
+            pady=3,
+        ).pack()
+
+    def _hide_tooltip(self, _event: Optional[tk.Event] = None) -> None:
+        if self._tooltip is not None:
+            self._tooltip.destroy()
+            self._tooltip = None
 
     def _prev_month(self) -> None:
         self.displayed_month -= 1
@@ -148,6 +168,7 @@ class HistoryWindow(tk.Toplevel):
 
     def refresh(self) -> None:
         """Zeichnet den Kalender fuer den aktuell angezeigten Monat neu."""
+        self._hide_tooltip()
         self.canvas.delete("all")
 
         year, month = self.displayed_year, self.displayed_month
@@ -177,39 +198,45 @@ class HistoryWindow(tk.Toplevel):
 
                 cx = col * CELL_SIZE + CELL_SIZE / 2
                 top = HEADER_HEIGHT + row * CELL_SIZE
+                cy = top + CELL_SIZE / 2
 
                 if key == today_iso:
-                    self.canvas.create_rectangle(
-                        col * CELL_SIZE + 1,
-                        top + 1,
-                        col * CELL_SIZE + CELL_SIZE - 1,
-                        top + CELL_SIZE - 1,
-                        fill="#e5e7eb",
-                        outline="",
+                    self.canvas.create_oval(
+                        cx - MAX_CIRCLE_RADIUS - 3, cy - MAX_CIRCLE_RADIUS - 3,
+                        cx + MAX_CIRCLE_RADIUS + 3, cy + MAX_CIRCLE_RADIUS + 3,
+                        outline="#2563eb", width=1.5,
                     )
 
-                self.canvas.create_text(
-                    cx, top + 9, text=str(day), font=("Segoe UI", 7), fill="#6b7280"
-                )
-
-                cy = top + CELL_SIZE / 2 + 5
                 radius = value_to_radius(value, max_value)
+                tag = f"day{key.replace('-', '')}"
+                tooltip_text = (
+                    f"{key}: {value} Klimmzüge" if value else f"{key}: keine Einträge"
+                )
 
                 if value > 0:
                     color = value_to_color(value, max_value)
                     self.canvas.create_oval(
                         cx - radius, cy - radius, cx + radius, cy + radius,
-                        fill=color, outline="",
+                        fill=color, outline="", tags=(tag,),
                     )
-                    self.canvas.create_text(
-                        cx, top + CELL_SIZE - 6,
-                        text=str(value), font=("Segoe UI", 7, "bold"), fill="#ea580c",
-                    )
+                    text_color = "white"
                 else:
                     self.canvas.create_oval(
                         cx - radius, cy - radius, cx + radius, cy + radius,
-                        outline="#d1d5db", dash=(2, 2),
+                        outline="#c3c8d1", tags=(tag,),
                     )
+                    text_color = "#6b7280"
+
+                self.canvas.create_text(
+                    cx, cy, text=str(day), font=("Segoe UI", 8, "bold"),
+                    fill=text_color, tags=(tag,),
+                )
+
+                self.canvas.tag_bind(
+                    tag, "<Enter>",
+                    lambda e, t=tooltip_text: self._show_tooltip(e, t),
+                )
+                self.canvas.tag_bind(tag, "<Leave>", self._hide_tooltip)
 
         total = self.master_app.data["total"]
         self.summary_label.config(

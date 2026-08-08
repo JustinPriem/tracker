@@ -39,9 +39,8 @@ const prevMonthBtn = document.getElementById("prevMonth");
 const nextMonthBtn = document.getElementById("nextMonth");
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const MIN_CIRCLE_SIZE = 14;
-const MAX_CIRCLE_SIZE = 34;
-const EMPTY_CIRCLE_SIZE = 10;
+const MIN_CIRCLE_SIZE = 26;
+const MAX_CIRCLE_SIZE = 40;
 
 let calendarDate = new Date();
 
@@ -82,8 +81,7 @@ function getDailyTotals() {
 }
 
 function valueToSize(value, maxValue) {
-  if (!value) return EMPTY_CIRCLE_SIZE;
-  if (maxValue <= 0) return MIN_CIRCLE_SIZE;
+  if (!value || maxValue <= 0) return MIN_CIRCLE_SIZE;
   const ratio = Math.min(value / maxValue, 1);
   return Math.round(MIN_CIRCLE_SIZE + ratio * (MAX_CIRCLE_SIZE - MIN_CIRCLE_SIZE));
 }
@@ -140,11 +138,6 @@ function renderCalendar() {
     const cell = document.createElement("div");
     cell.className = "day-cell" + (key === todayKey ? " today" : "");
 
-    const dayNumber = document.createElement("div");
-    dayNumber.className = "day-number";
-    dayNumber.textContent = String(day);
-    cell.appendChild(dayNumber);
-
     const circle = document.createElement("div");
     const size = valueToSize(value, maxValue);
     circle.style.width = `${size}px`;
@@ -157,12 +150,8 @@ function renderCalendar() {
       circle.className = "day-circle no-data";
       circle.title = `${key}: keine Einträge`;
     }
+    circle.textContent = String(day);
     cell.appendChild(circle);
-
-    const valueLabel = document.createElement("div");
-    valueLabel.className = "day-value";
-    valueLabel.textContent = value > 0 ? String(value) : "";
-    cell.appendChild(valueLabel);
 
     calendarGrid.appendChild(cell);
   }
