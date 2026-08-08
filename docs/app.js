@@ -31,8 +31,19 @@ const undoBtn = document.getElementById("undoBtn");
 const historyBtn = document.getElementById("historyBtn");
 const historyDialog = document.getElementById("historyDialog");
 const closeHistoryBtn = document.getElementById("closeHistory");
-const historyBody = document.getElementById("historyBody");
 const historySummary = document.getElementById("historySummary");
+const calendarTitle = document.getElementById("calendarTitle");
+const weekdayRow = document.getElementById("weekdayRow");
+const calendarGrid = document.getElementById("calendarGrid");
+const prevMonthBtn = document.getElementById("prevMonth");
+const nextMonthBtn = document.getElementById("nextMonth");
+
+const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const MIN_CIRCLE_SIZE = 14;
+const MAX_CIRCLE_SIZE = 34;
+const EMPTY_CIRCLE_SIZE = 10;
+
+let calendarDate = new Date();
 
 function render() {
   counterEl.textContent = data.total;
@@ -44,7 +55,7 @@ function addDelta(delta) {
   data.log.push({ timestamp: new Date().toISOString(), delta });
   saveData(data);
   render();
-  if (historyDialog.open) renderHistory();
+  if (historyDialog.open) renderCalendar();
 }
 
 function undo() {
@@ -53,33 +64,110 @@ function undo() {
   data.total -= last.delta;
   saveData(data);
   render();
-  if (historyDialog.open) renderHistory();
+  if (historyDialog.open) renderCalendar();
 }
 
-function formatTimestamp(iso) {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString("de-DE"),
-    time: d.toLocaleTimeString("de-DE"),
-  };
+function dateKey(year, monthIndex, day) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function renderHistory() {
-  historyBody.innerHTML = "";
-  const dailyTotals = {};
-  const todayStr = new Date().toLocaleDateString("de-DE");
+function getDailyTotals() {
+  const totals = {};
+  for (const entry of data.log) {
+    const d = new Date(entry.timestamp);
+    const key = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    totals[key] = (totals[key] || 0) + entry.delta;
+  }
+  return totals;
+}
 
-  for (let i = data.log.length - 1; i >= 0; i--) {
-    const entry = data.log[i];
-    const { date, time } = formatTimestamp(entry.timestamp);
-    const row = document.createElement("tr");
-    row.innerHTML = `<td>${date}</td><td>${time}</td><td>+${entry.delta}</td>`;
-    historyBody.appendChild(row);
-    dailyTotals[date] = (dailyTotals[date] || 0) + entry.delta;
+function valueToSize(value, maxValue) {
+  if (!value) return EMPTY_CIRCLE_SIZE;
+  if (maxValue <= 0) return MIN_CIRCLE_SIZE;
+  const ratio = Math.min(value / maxValue, 1);
+  return Math.round(MIN_CIRCLE_SIZE + ratio * (MAX_CIRCLE_SIZE - MIN_CIRCLE_SIZE));
+}
+
+function hexToRgb(hex) {
+  const clean = hex.trim().replace("#", "");
+  const bigint = parseInt(clean, 16);
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+}
+
+function valueToColor(value, maxValue) {
+  const styles = getComputedStyle(document.documentElement);
+  const low = hexToRgb(styles.getPropertyValue("--heat-low") || "#ffe0bd");
+  const high = hexToRgb(styles.getPropertyValue("--heat-high") || "#ea580c");
+  const ratio = maxValue > 0 ? Math.min(value / maxValue, 1) : 1;
+  const rgb = low.map((start, i) => Math.round(start + (high[i] - start) * ratio));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+
+function renderCalendar() {
+  const year = calendarDate.getFullYear();
+  const monthIndex = calendarDate.getMonth();
+  const totals = getDailyTotals();
+  const maxValue = Object.values(totals).length ? Math.max(...Object.values(totals)) : 0;
+
+  calendarTitle.textContent = calendarDate.toLocaleDateString("de-DE", {
+    month: "long",
+    year: "numeric",
+  });
+
+  weekdayRow.innerHTML = WEEKDAY_LABELS.map((label) => `<div>${label}</div>`).join("");
+  calendarGrid.innerHTML = "";
+
+  const firstOfMonth = new Date(year, monthIndex, 1);
+  const firstWeekday = (firstOfMonth.getDay() + 6) % 7; // Montag = 0
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  const today = new Date();
+  const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+  for (let i = 0; i < firstWeekday; i++) {
+    const filler = document.createElement("div");
+    filler.className = "day-cell empty-cell";
+    calendarGrid.appendChild(filler);
   }
 
-  const todayTotal = dailyTotals[todayStr] || 0;
-  historySummary.textContent = `Heute: ${todayTotal}  |  Gesamt: ${data.total}`;
+  let monthTotal = 0;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = dateKey(year, monthIndex, day);
+    const value = totals[key] || 0;
+    monthTotal += value;
+
+    const cell = document.createElement("div");
+    cell.className = "day-cell" + (key === todayKey ? " today" : "");
+
+    const dayNumber = document.createElement("div");
+    dayNumber.className = "day-number";
+    dayNumber.textContent = String(day);
+    cell.appendChild(dayNumber);
+
+    const circle = document.createElement("div");
+    const size = valueToSize(value, maxValue);
+    circle.style.width = `${size}px`;
+    circle.style.height = `${size}px`;
+    if (value > 0) {
+      circle.className = "day-circle";
+      circle.style.background = valueToColor(value, maxValue);
+      circle.title = `${key}: ${value} Klimmzüge`;
+    } else {
+      circle.className = "day-circle no-data";
+      circle.title = `${key}: keine Einträge`;
+    }
+    cell.appendChild(circle);
+
+    const valueLabel = document.createElement("div");
+    valueLabel.className = "day-value";
+    valueLabel.textContent = value > 0 ? String(value) : "";
+    cell.appendChild(valueLabel);
+
+    calendarGrid.appendChild(cell);
+  }
+
+  historySummary.textContent = `Diesen Monat: ${monthTotal}  |  Gesamt: ${data.total}`;
 }
 
 document.querySelectorAll(".btn-add").forEach((btn) => {
@@ -89,10 +177,21 @@ document.querySelectorAll(".btn-add").forEach((btn) => {
 undoBtn.addEventListener("click", undo);
 
 historyBtn.addEventListener("click", () => {
-  renderHistory();
+  calendarDate = new Date();
+  renderCalendar();
   historyDialog.showModal();
 });
 
 closeHistoryBtn.addEventListener("click", () => historyDialog.close());
+
+prevMonthBtn.addEventListener("click", () => {
+  calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
+  renderCalendar();
+});
+
+nextMonthBtn.addEventListener("click", () => {
+  calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+  renderCalendar();
+});
 
 render();
