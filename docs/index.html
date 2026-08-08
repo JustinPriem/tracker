@@ -32,19 +32,17 @@
 
   <dialog id="historyDialog">
     <h2>Verlauf</h2>
-    <div class="summary" id="historySummary"></div>
-    <div class="history-table-wrap">
-      <table id="historyTable">
-        <thead>
-          <tr>
-            <th>Datum</th>
-            <th>Uhrzeit</th>
-            <th>Anzahl</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody"></tbody>
-      </table>
+
+    <div class="calendar-header">
+      <button id="prevMonth" class="icon-btn" aria-label="Vorheriger Monat">‹</button>
+      <div class="calendar-title" id="calendarTitle"></div>
+      <button id="nextMonth" class="icon-btn" aria-label="Nächster Monat">›</button>
     </div>
+
+    <div class="weekday-row" id="weekdayRow"></div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+
+    <div class="summary" id="historySummary"></div>
     <button id="closeHistory" class="btn btn-secondary">Schließen</button>
   </dialog>
 

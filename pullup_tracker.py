@@ -15,15 +15,49 @@ Die Daten (Gesamtzaehler + Verlauf) werden dauerhaft gespeichert unter:
 
 from __future__ import annotations
 
+import calendar
 import json
 import tkinter as tk
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from tkinter import ttk
 from typing import Optional
 
 DATA_DIR = Path.home() / ".pullup_tracker"
 DATA_FILE = DATA_DIR / "data.json"
+
+WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+MONTH_NAMES = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+]
+
+MIN_CIRCLE_RADIUS = 7
+MAX_CIRCLE_RADIUS = 17
+EMPTY_CIRCLE_RADIUS = 5
+
+CELL_SIZE = 42
+HEADER_HEIGHT = 22
+CANVAS_WIDTH = CELL_SIZE * 7
+
+
+def value_to_radius(value: int, max_value: int) -> int:
+    """Bestimmt den Kreisradius abhaengig von der Tages-Anzahl."""
+    if not value:
+        return EMPTY_CIRCLE_RADIUS
+    if max_value <= 0:
+        return MIN_CIRCLE_RADIUS
+    ratio = min(value / max_value, 1)
+    return round(MIN_CIRCLE_RADIUS + ratio * (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS))
+
+
+def value_to_color(value: int, max_value: int) -> str:
+    """Interpoliert zwischen hellem und kraeftigem Orange je nach Anzahl."""
+    low = (255, 224, 189)
+    high = (234, 88, 12)
+    ratio = min(value / max_value, 1) if max_value > 0 else 1
+    rgb = tuple(round(lo + (hi - lo) * ratio) for lo, hi in zip(low, high))
+    return "#%02x%02x%02x" % rgb
 
 
 def load_data() -> dict:
@@ -48,52 +82,139 @@ def save_data(data: dict) -> None:
 
 
 class HistoryWindow(tk.Toplevel):
-    """Overlay-Fenster mit dem kompletten Verlauf aller Eintraege."""
+    """Overlay-Fenster mit Kalenderansicht: Tage als unterschiedlich
+    grosse/farbige Kreise, je nachdem wie viele Klimmzuege an dem Tag
+    gemacht wurden (angelehnt an den Strava-Trainingskalender)."""
 
     def __init__(self, master: "PullupTracker") -> None:
         super().__init__(master)
         self.master_app = master
         self.title("Verlauf")
-        self.geometry("340x420")
+        self.resizable(False, False)
         self.attributes("-topmost", True)
 
-        ttk.Label(self, text="Verlauf", font=("Segoe UI", 12, "bold")).pack(
-            pady=(10, 4)
+        today = date.today()
+        self.displayed_year = today.year
+        self.displayed_month = today.month
+
+        nav_frame = tk.Frame(self)
+        nav_frame.pack(pady=(10, 2), fill="x", padx=10)
+
+        tk.Button(nav_frame, text="◀", width=3, command=self._prev_month).pack(
+            side="left"
+        )
+        self.month_label = tk.Label(
+            nav_frame, text="", font=("Segoe UI", 11, "bold")
+        )
+        self.month_label.pack(side="left", expand=True)
+        tk.Button(nav_frame, text="▶", width=3, command=self._next_month).pack(
+            side="right"
         )
 
-        columns = ("datum", "uhrzeit", "anzahl")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=15)
-        self.tree.heading("datum", text="Datum")
-        self.tree.heading("uhrzeit", text="Uhrzeit")
-        self.tree.heading("anzahl", text="Anzahl")
-        self.tree.column("datum", width=100, anchor="center")
-        self.tree.column("uhrzeit", width=90, anchor="center")
-        self.tree.column("anzahl", width=70, anchor="center")
-        self.tree.pack(fill="both", expand=True, padx=10, pady=5)
+        self.canvas = tk.Canvas(
+            self,
+            width=CANVAS_WIDTH,
+            height=HEADER_HEIGHT + CELL_SIZE * 6,
+            highlightthickness=0,
+        )
+        self.canvas.pack(padx=10, pady=(4, 4))
 
         self.summary_label = ttk.Label(self, text="", font=("Segoe UI", 10))
         self.summary_label.pack(pady=(0, 10))
 
         self.refresh()
 
-    def refresh(self) -> None:
-        """Baut die Tabelle neu auf Basis der aktuellen Daten."""
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+    def _prev_month(self) -> None:
+        self.displayed_month -= 1
+        if self.displayed_month < 1:
+            self.displayed_month = 12
+            self.displayed_year -= 1
+        self.refresh()
 
-        log = self.master_app.data["log"]
-        daily_totals: dict[str, int] = {}
-        for entry in reversed(log):
+    def _next_month(self) -> None:
+        self.displayed_month += 1
+        if self.displayed_month > 12:
+            self.displayed_month = 1
+            self.displayed_year += 1
+        self.refresh()
+
+    def _daily_totals(self) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for entry in self.master_app.data["log"]:
             ts = datetime.fromisoformat(entry["timestamp"])
-            date_str = ts.strftime("%d.%m.%Y")
-            time_str = ts.strftime("%H:%M:%S")
-            self.tree.insert("", "end", values=(date_str, time_str, f"+{entry['delta']}"))
-            daily_totals[date_str] = daily_totals.get(date_str, 0) + entry["delta"]
+            key = ts.date().isoformat()
+            totals[key] = totals.get(key, 0) + entry["delta"]
+        return totals
+
+    def refresh(self) -> None:
+        """Zeichnet den Kalender fuer den aktuell angezeigten Monat neu."""
+        self.canvas.delete("all")
+
+        year, month = self.displayed_year, self.displayed_month
+        self.month_label.config(text=f"{MONTH_NAMES[month - 1]} {year}")
+
+        daily_totals = self._daily_totals()
+        max_value = max(daily_totals.values(), default=0)
+
+        for col, label in enumerate(WEEKDAY_LABELS):
+            x = col * CELL_SIZE + CELL_SIZE / 2
+            self.canvas.create_text(
+                x, HEADER_HEIGHT / 2, text=label, font=("Segoe UI", 8), fill="#6b7280"
+            )
+
+        weeks = calendar.Calendar(firstweekday=0).monthdayscalendar(year, month)
+        today_iso = date.today().isoformat()
+        month_total = 0
+
+        for row, week in enumerate(weeks):
+            for col, day in enumerate(week):
+                if day == 0:
+                    continue
+
+                key = date(year, month, day).isoformat()
+                value = daily_totals.get(key, 0)
+                month_total += value
+
+                cx = col * CELL_SIZE + CELL_SIZE / 2
+                top = HEADER_HEIGHT + row * CELL_SIZE
+
+                if key == today_iso:
+                    self.canvas.create_rectangle(
+                        col * CELL_SIZE + 1,
+                        top + 1,
+                        col * CELL_SIZE + CELL_SIZE - 1,
+                        top + CELL_SIZE - 1,
+                        fill="#e5e7eb",
+                        outline="",
+                    )
+
+                self.canvas.create_text(
+                    cx, top + 9, text=str(day), font=("Segoe UI", 7), fill="#6b7280"
+                )
+
+                cy = top + CELL_SIZE / 2 + 5
+                radius = value_to_radius(value, max_value)
+
+                if value > 0:
+                    color = value_to_color(value, max_value)
+                    self.canvas.create_oval(
+                        cx - radius, cy - radius, cx + radius, cy + radius,
+                        fill=color, outline="",
+                    )
+                    self.canvas.create_text(
+                        cx, top + CELL_SIZE - 6,
+                        text=str(value), font=("Segoe UI", 7, "bold"), fill="#ea580c",
+                    )
+                else:
+                    self.canvas.create_oval(
+                        cx - radius, cy - radius, cx + radius, cy + radius,
+                        outline="#d1d5db", dash=(2, 2),
+                    )
 
         total = self.master_app.data["total"]
-        today_str = datetime.now().strftime("%d.%m.%Y")
-        today_total = daily_totals.get(today_str, 0)
-        self.summary_label.config(text=f"Heute: {today_total}   |   Gesamt: {total}")
+        self.summary_label.config(
+            text=f"Diesen Monat: {month_total}   |   Gesamt: {total}"
+        )
 
 
 class PullupTracker(tk.Tk):
