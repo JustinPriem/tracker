@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Klimmzug-Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>Klimmzug-Tracker</h1>
+
+    <div class="counter" id="counter">0</div>
+    <div class="counter-label">Klimmzüge gesamt</div>
+
+    <div class="buttons">
+      <button class="btn btn-add" data-delta="1">+1</button>
+      <button class="btn btn-add" data-delta="3">+3</button>
+      <button class="btn btn-add" data-delta="5">+5</button>
+    </div>
+
+    <div class="actions">
+      <button id="undoBtn" class="btn btn-secondary" disabled>Rückgängig</button>
+      <button id="historyBtn" class="btn btn-secondary">Verlauf</button>
+    </div>
+
+    <p class="hint">
+      Deine Daten werden nur lokal in diesem Browser gespeichert (kein
+      Login, kein Server) und bleiben auch nach Neustart erhalten.
+    </p>
+  </main>
+
+  <dialog id="historyDialog">
+    <h2>Verlauf</h2>
+    <div class="summary" id="historySummary"></div>
+    <div class="history-table-wrap">
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Uhrzeit</th>
+            <th>Anzahl</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <button id="closeHistory" class="btn btn-secondary">Schließen</button>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
