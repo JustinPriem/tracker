@@ -8,10 +8,12 @@
 </head>
 <body>
   <main class="card">
-    <h1>Klimmzug-Tracker</h1>
+    <div class="eyebrow">K L I M M Z Ü G E</div>
 
     <div class="counter" id="counter">0</div>
-    <div class="counter-label">Klimmzüge gesamt</div>
+    <div class="counter-label">A K T U E L L E R&nbsp; S A T Z</div>
+
+    <div class="divider"></div>
 
     <div class="buttons">
       <button class="btn btn-add" data-delta="1">+1</button>
@@ -19,9 +21,17 @@
       <button class="btn btn-add" data-delta="5">+5</button>
     </div>
 
+    <button id="finishBtn" class="btn btn-finish" disabled>✓ Satz beenden</button>
+
+    <div class="divider"></div>
+
+    <div class="sets-label">S Ä T Z E&nbsp; H E U T E</div>
+    <div class="sets-value" id="setsToday">–</div>
+    <div class="total-line" id="totalLine">GESAMT 0</div>
+
     <div class="actions">
-      <button id="undoBtn" class="btn btn-secondary" disabled>Rückgängig</button>
-      <button id="historyBtn" class="btn btn-secondary">Verlauf</button>
+      <button id="undoBtn" class="btn btn-secondary" disabled>↺ Rückgängig</button>
+      <button id="historyBtn" class="btn btn-secondary btn-history">📅 Verlauf</button>
     </div>
 
     <p class="hint">
