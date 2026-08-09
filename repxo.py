@@ -1,16 +1,19 @@
 """
-Klimmzug-Tracker
-================
+Repxo
+=====
 
-Ein einfaches Popup-Programm zum Zaehlen von Klimmzuegen (z.B. in
-Zockpausen). Das Fenster bleibt immer im Vordergrund und kann frei auf
-dem Desktop verschoben werden (normales Fensterverhalten von Windows).
+Klimmzug-Tracker: ein schlankes Popup-Programm zum Zaehlen von
+Klimmzuegen (z.B. in Zockpausen). Das Fenster bleibt immer im
+Vordergrund und kann frei auf dem Desktop verschoben werden.
+
+Name: REP fuer Wiederholungen (Repetitions), XO als Verweis auf den
+Computer/das System.
 
 Start:
-    python pullup_tracker.py
+    python repxo.py
 
 Die Daten (Gesamtzaehler + Verlauf) werden dauerhaft gespeichert unter:
-    ~/.pullup_tracker/data.json
+    ~/.repxo/data.json
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from __future__ import annotations
 import calendar
 import ctypes
 import json
+import shutil
+import sys
 import tkinter as tk
 from datetime import date, datetime
 from pathlib import Path
@@ -25,8 +30,34 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageTk
 
-DATA_DIR = Path.home() / ".pullup_tracker"
+APP_NAME = "Repxo"
+
+DATA_DIR = Path.home() / ".repxo"
 DATA_FILE = DATA_DIR / "data.json"
+
+# Alter Datenordner aus der Zeit vor dem Rebranding zu "Repxo" - wird beim
+# ersten Start automatisch nach DATA_DIR migriert, damit niemand seine
+# bisherigen Klimmzuege verliert.
+LEGACY_DATA_FILE = Path.home() / ".pullup_tracker" / "data.json"
+
+
+def resource_path(*parts: str) -> Path:
+    """Findet Dateien wie das Icon sowohl im Skript- als auch im
+    PyInstaller-gebuendelten Modus (dort liegen Extra-Dateien unter
+    sys._MEIPASS statt neben dem Skript)."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base.joinpath(*parts)
+
+
+def _migrate_legacy_data() -> None:
+    """Einmalige Migration alter Daten aus ~/.pullup_tracker nach ~/.repxo."""
+    if DATA_FILE.exists() or not LEGACY_DATA_FILE.exists():
+        return
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(LEGACY_DATA_FILE, DATA_FILE)
+    except OSError:
+        pass
 
 WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 MONTH_NAMES = [
@@ -34,11 +65,11 @@ MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
-MIN_CIRCLE_RADIUS = 13
-MAX_CIRCLE_RADIUS = 20
+MIN_CIRCLE_RADIUS = 10
+MAX_CIRCLE_RADIUS = 15
 
-CELL_SIZE = 46
-HEADER_HEIGHT = 24
+CELL_SIZE = 34  # muss inkl. Padding in die 270px breite Buehne passen (7 Spalten)
+HEADER_HEIGHT = 22
 CANVAS_WIDTH = CELL_SIZE * 7
 
 TITLE_BAR_HEIGHT = 34
@@ -166,19 +197,23 @@ def load_data() -> dict:
     - log: jeder einzelne +1/+3/+5 Klick (fuer Kalender-Heatmap & Undo)
     - current_set: laufender, noch nicht abgeschlossener Arbeitssatz
     - sets: alle abgeschlossenen Arbeitssaetze (Datum, Uhrzeit, Wiederholungen)
+    - window: zuletzt gespeicherte Fensterposition {"x": int, "y": int}
+      oder None, wenn die App noch nie manuell verschoben wurde
     """
+    _migrate_legacy_data()
     if DATA_FILE.exists():
         try:
-            with DATA_FILE.open("r", encoding="utf-8") as f:
+            with DATA_FILE.open("r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             data.setdefault("total", 0)
             data.setdefault("log", [])
             data.setdefault("current_set", 0)
             data.setdefault("sets", [])
+            data.setdefault("window", None)
             return data
         except (json.JSONDecodeError, OSError):
             pass
-    return {"total": 0, "log": [], "current_set": 0, "sets": []}
+    return {"total": 0, "log": [], "current_set": 0, "sets": [], "window": None}
 
 
 def save_data(data: dict) -> None:
@@ -218,9 +253,11 @@ class TitleBar(tk.Frame):
         target: tk.Misc,
         title: str,
         on_close: Callable[[], None],
+        on_move_end: Optional[Callable[[], None]] = None,
     ) -> None:
         super().__init__(master, bg=BG_CARD, height=TITLE_BAR_HEIGHT)
         self.target = target
+        self.on_move_end = on_move_end
         self.pack_propagate(False)
 
         icon_label = tk.Label(
@@ -246,17 +283,24 @@ class TitleBar(tk.Frame):
         for widget in (self, icon_label, title_label):
             widget.bind("<ButtonPress-1>", self._start_move)
             widget.bind("<B1-Motion>", self._do_move)
+            widget.bind("<ButtonRelease-1>", self._end_move)
 
     def _start_move(self, event: tk.Event) -> None:
         self._start_x = event.x_root
         self._start_y = event.y_root
         self._win_x = self.target.winfo_x()
         self._win_y = self.target.winfo_y()
+        self._moved = False
 
     def _do_move(self, event: tk.Event) -> None:
         dx = event.x_root - self._start_x
         dy = event.y_root - self._start_y
         self.target.geometry(f"+{self._win_x + dx}+{self._win_y + dy}")
+        self._moved = True
+
+    def _end_move(self, _event: tk.Event) -> None:
+        if self._moved and self.on_move_end is not None:
+            self.on_move_end()
 
 
 class RoundedButton(tk.Canvas):
@@ -346,28 +390,38 @@ class RoundedButton(tk.Canvas):
         self._draw("disabled" if not self.enabled else "normal")
 
 
-class HistoryWindow(tk.Toplevel):
-    """Overlay-Fenster mit Kalenderansicht: Tage als unterschiedlich
-    grosse/farbige Kreise, je nachdem wie viele Klimmzuege an dem Tag
-    gemacht wurden (angelehnt an den Strava-Trainingskalender)."""
+class HistoryPage(tk.Frame):
+    """Kalenderansicht als eingebettete Seite (kein eigenes Fenster mehr):
+    Tage als unterschiedlich grosse/farbige Kreise, je nachdem wie viele
+    Klimmzuege an dem Tag gemacht wurden (angelehnt an den
+    Strava-Trainingskalender). Wird per Karten-Flip-Animation im
+    Hauptfenster ein- und ausgeblendet, siehe RepxoApp._flip_to_page."""
 
-    def __init__(self, master: "PullupTracker") -> None:
-        super().__init__(master)
-        self.master_app = master
-        self.title("Verlauf")
-        self.configure(bg=BG_DARK, highlightthickness=1, highlightbackground=BORDER)
-        self.resizable(False, False)
-        self.attributes("-topmost", True)
-        self.overrideredirect(True)
-
-        TitleBar(self, self, "Verlauf", self.destroy).pack(fill="x")
+    def __init__(self, master: tk.Widget, app: "RepxoApp") -> None:
+        super().__init__(master, bg=BG_DARK)
+        self.master_app = app
 
         today = date.today()
         self.displayed_year = today.year
         self.displayed_month = today.month
 
+        header_frame = tk.Frame(self, bg=BG_DARK)
+        header_frame.pack(fill="x", padx=14, pady=(14, 2))
+
+        RoundedButton(
+            header_frame, text="←  Zurück", command=app.show_counter,
+            width=92, height=30, radius=12, font=FONT_BUTTON_SMALL,
+            fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
+            outline=BORDER, outline_width=1, bg_parent=BG_DARK,
+        ).pack(side="left")
+
+        tk.Label(
+            header_frame, text=spaced("VERLAUF"), font=FONT_EYEBROW,
+            bg=BG_DARK, fg=ACCENT,
+        ).pack(side="right")
+
         nav_frame = tk.Frame(self, bg=BG_DARK)
-        nav_frame.pack(pady=(14, 4), fill="x", padx=14)
+        nav_frame.pack(pady=(10, 4), fill="x", padx=14)
 
         tk.Button(
             nav_frame, text="◀", width=3, command=self._prev_month,
@@ -546,30 +600,96 @@ class HistoryWindow(tk.Toplevel):
         )
 
 
-class PullupTracker(tk.Tk):
-    """Hauptfenster: kompaktes, verschiebbares Popup mit den Zaehl-Buttons."""
+WINDOW_WIDTH = 270
+WINDOW_HEIGHT = 520
+STAGE_HEIGHT = WINDOW_HEIGHT - TITLE_BAR_HEIGHT
+
+FLIP_STEPS = 10
+FLIP_INTERVAL_MS = 16
+
+
+def _ease_in_out(t: float) -> float:
+    """Smoothstep-Easing fuer eine natuerlich wirkende Flip-Bewegung."""
+    return t * t * (3 - 2 * t)
+
+
+class RepxoApp(tk.Tk):
+    """Hauptfenster: kompaktes, verschiebbares Popup mit den Zaehl-Buttons.
+
+    Zaehler- und Verlaufsansicht leben als zwei Seiten im selben Fenster
+    und werden per Karten-Flip-Animation gewechselt (siehe _flip_to_page) -
+    kein separates Popup-Fenster mehr fuer den Kalender.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("Klimmzug-Tracker")
-        self.geometry("270x520")
+        self.title(APP_NAME)
         self.configure(bg=BG_DARK, highlightthickness=1, highlightbackground=BORDER)
         self.resizable(False, False)
         self.attributes("-topmost", True)
         self.overrideredirect(True)
 
+        try:
+            self.iconbitmap(default=str(resource_path("assets", "icon.ico")))
+        except Exception:
+            pass
+
         self.data = load_data()
-        self.history_window: Optional[HistoryWindow] = None
+        self._animating = False
+
+        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}+{self._startup_x()}+{self._startup_y()}")
 
         self._build_ui()
         self.after(10, lambda: ensure_taskbar_icon(self))
 
+    def _startup_x(self) -> int:
+        saved = self.data.get("window")
+        if saved and "x" in saved:
+            return saved["x"]
+        return max(0, (self.winfo_screenwidth() - WINDOW_WIDTH) // 2)
+
+    def _startup_y(self) -> int:
+        saved = self.data.get("window")
+        if saved and "y" in saved:
+            return saved["y"]
+        return max(0, (self.winfo_screenheight() - WINDOW_HEIGHT) // 2)
+
+    def _save_window_position(self) -> None:
+        self.data["window"] = {"x": self.winfo_x(), "y": self.winfo_y()}
+        save_data(self.data)
+
+    def _close(self) -> None:
+        self._save_window_position()
+        self.destroy()
+
     def _build_ui(self) -> None:
-        TitleBar(self, self, "Klimmzug-Tracker", self.destroy).pack(fill="x")
+        TitleBar(
+            self, self, APP_NAME, self._close,
+            on_move_end=self._save_window_position,
+        ).pack(fill="x")
 
-        content = tk.Frame(self, bg=BG_DARK)
-        content.pack(fill="both", expand=True)
+        # "Buehne": haelt beide Seiten (Zaehler/Verlauf) uebereinander in
+        # einem Canvas, damit die Flip-Animation die sichtbare Seite per
+        # Breiten-Animation zusammenschrumpfen/aufwachsen lassen kann.
+        self.stage = tk.Canvas(
+            self, width=WINDOW_WIDTH, height=STAGE_HEIGHT,
+            bg=BG_DARK, highlightthickness=0,
+        )
+        self.stage.pack(fill="both", expand=True)
 
+        self.counter_page = tk.Frame(self.stage, bg=BG_DARK)
+        self._build_counter_page(self.counter_page)
+
+        self.history_page = HistoryPage(self.stage, self)
+
+        self._stage_item = self.stage.create_window(
+            WINDOW_WIDTH // 2, 0, anchor="n", window=self.counter_page,
+            width=WINDOW_WIDTH, height=STAGE_HEIGHT,
+        )
+
+        self._refresh_display()
+
+    def _build_counter_page(self, content: tk.Frame) -> None:
         tk.Label(
             content, text=spaced("KLIMMZÜGE"), font=FONT_EYEBROW,
             bg=BG_DARK, fg=ACCENT,
@@ -646,7 +766,43 @@ class PullupTracker(tk.Tk):
             bg_parent=BG_DARK,
         ).pack(side="left")
 
-        self._refresh_display()
+    def _flip_to_page(self, target_widget: tk.Widget, on_swap: Optional[Callable[[], None]] = None) -> None:
+        """Karten-Flip: aktuelle Seite schrumpft horizontal zur Mitte zusammen,
+        Inhalt wird im schmalsten Moment ausgetauscht, dann waechst die neue
+        Seite wieder auf volle Breite - simuliert eine Karte, die sich dreht."""
+        if self._animating:
+            return
+        self._animating = True
+
+        def shrink(i: int = 0) -> None:
+            t = i / FLIP_STEPS
+            w = max(2, round(WINDOW_WIDTH * (1 - _ease_in_out(t))))
+            self.stage.itemconfig(self._stage_item, width=w)
+            if i < FLIP_STEPS:
+                self.after(FLIP_INTERVAL_MS, lambda: shrink(i + 1))
+            else:
+                self.stage.itemconfig(self._stage_item, window=target_widget, width=2)
+                if on_swap:
+                    on_swap()
+                grow()
+
+        def grow(i: int = 0) -> None:
+            t = i / FLIP_STEPS
+            w = max(2, round(WINDOW_WIDTH * _ease_in_out(t)))
+            self.stage.itemconfig(self._stage_item, width=w)
+            if i < FLIP_STEPS:
+                self.after(FLIP_INTERVAL_MS, lambda: grow(i + 1))
+            else:
+                self.stage.itemconfig(self._stage_item, width=WINDOW_WIDTH)
+                self._animating = False
+
+        shrink()
+
+    def show_history(self) -> None:
+        self._flip_to_page(self.history_page, on_swap=self.history_page.refresh)
+
+    def show_counter(self) -> None:
+        self._flip_to_page(self.counter_page)
 
     def add(self, delta: int) -> None:
         self.data["total"] += delta
@@ -714,20 +870,9 @@ class PullupTracker(tk.Tk):
         else:
             self.undo_btn.set_text("↺  Rückgängig")
 
-        self._refresh_history()
-
-    def show_history(self) -> None:
-        if self.history_window is not None and self.history_window.winfo_exists():
-            self.history_window.lift()
-            self.history_window.focus_force()
-            return
-        self.history_window = HistoryWindow(self)
-
-    def _refresh_history(self) -> None:
-        if self.history_window is not None and self.history_window.winfo_exists():
-            self.history_window.refresh()
+        self.history_page.refresh()
 
 
 if __name__ == "__main__":
-    app = PullupTracker()
+    app = RepxoApp()
     app.mainloop()

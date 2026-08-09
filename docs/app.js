@@ -1,4 +1,4 @@
-// Klimmzug-Tracker (Browser-Version)
+// Repxo (Browser-Version) – Klimmzug-Tracker
 // Speichert Daten lokal im Browser (localStorage). Keine Anmeldung, kein
 // Server nötig; Daten bleiben nach Neustart erhalten, sind aber an diesen
 // einen Browser auf diesem einen Gerät gebunden.
@@ -9,11 +9,20 @@
 // - currentSet: laufender, noch nicht abgeschlossener Arbeitssatz
 // - sets: alle abgeschlossenen Arbeitssätze (Datum, Uhrzeit, Wiederholungen)
 
-const STORAGE_KEY = "pullupTrackerData";
+const STORAGE_KEY = "repxoData";
+const LEGACY_STORAGE_KEY = "pullupTrackerData"; // vor dem Rebranding zu Repxo
 
 function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // Einmalige Migration alter Daten aus der Zeit vor "Repxo".
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        raw = legacy;
+        localStorage.setItem(STORAGE_KEY, legacy);
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (typeof parsed.total !== "number") parsed.total = 0;

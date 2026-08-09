@@ -1,8 +1,11 @@
-# Klimmzug-Tracker
+# Repxo
 
 Ein schlankes, immer-im-Vordergrund-Popup, um Klimmzüge in Spielpausen zu
 zählen – im dunklen, sportlichen Design mit eigener (rahmenloser)
 Titelleiste, angelehnt an Overlay-Programme wie Overwolf.
+
+> **Der Name:** REP für Wiederholungen (Repetitions), XO als Verweis auf
+> den Computer/das System.
 
 Es gibt die App als Windows-Desktop-Programm (Python/tkinter) und als
 reine Browser-Version (HTML/CSS/JS, z.B. über GitHub Pages) – beide mit
@@ -39,7 +42,7 @@ identischem Funktionsumfang.
 ### Starten
 
 ```bash
-python pullup_tracker.py
+python repxo.py
 ```
 
 Ein Doppelklick auf die Datei funktioniert ebenfalls, falls `.py`-Dateien
@@ -51,20 +54,21 @@ Der Gesamtzähler, der Klick-Verlauf und die abgeschlossenen Arbeitssätze
 werden gespeichert unter:
 
 ```
-%USERPROFILE%\.pullup_tracker\data.json
+%USERPROFILE%\.repxo\data.json
 ```
 
 Die Datei kann bei Bedarf gelöscht werden, um komplett von vorne zu
-beginnen.
+beginnen. Daten aus der Zeit vor dem Rebranding (`%USERPROFILE%\.pullup_tracker`)
+werden beim ersten Start automatisch übernommen.
 
 ### Als eigenständige .exe bauen
 
 ```bash
 pip install pyinstaller
-pyinstaller --onedir --noconsole --name "Klimmzug-Tracker" pullup_tracker.py
+pyinstaller --onedir --noconsole --name "Repxo" --icon assets\icon.ico --add-data "assets;assets" repxo.py
 ```
 
-Das Ergebnis liegt danach in `dist/Klimmzug-Tracker/` – die `.exe` und der
+Das Ergebnis liegt danach in `dist/Repxo/` – die `.exe` und der
 `_internal/`-Ordner gehören zusammen und müssen beim Verschieben/Kopieren
 immer zusammenbleiben.
 
@@ -81,8 +85,8 @@ unsignierten Programmen ist normal).
 
 ## Browser-Version (GitHub Pages)
 
-Im Ordner [`docs/`](docs/) liegt eine reine HTML/CSS/JS-Version des
-Trackers – funktioniert in jedem modernen Browser, ganz ohne Python,
+Im Ordner [`docs/`](docs/) liegt eine reine HTML/CSS/JS-Version von
+Repxo – funktioniert in jedem modernen Browser, ganz ohne Python,
 mit identischem Design und Funktionsumfang wie die Desktop-Version
 (Sätze, Rückgängig-Verhalten, Kalender mit Satz-Aufschlüsselung).
 
