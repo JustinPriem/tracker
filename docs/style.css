@@ -47,6 +47,26 @@ body {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.brand-dot {
+  color: var(--accent);
+  font-size: 0.55rem;
+}
+
+.brand-name {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
 .eyebrow {
   color: var(--accent);
   font-size: 0.75rem;
