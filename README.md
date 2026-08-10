@@ -11,6 +11,9 @@ Es gibt die App als Windows-Desktop-Programm (Python/tkinter) und als
 reine Browser-Version (HTML/CSS/JS, z.B. über GitHub Pages) – beide mit
 identischem Funktionsumfang.
 
+**📥 [Fertige Windows-Version herunterladen](https://github.com/JustinPriem/tracker/releases/latest)**
+(ZIP entpacken, `Repxo.exe` starten – kein Python nötig)
+
 ## Funktionen
 
 - Buttons **+1 / +3 / +5** zum schnellen Hochzählen des aktuellen Satzes
