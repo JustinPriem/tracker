@@ -199,6 +199,20 @@ body {
   background: var(--border);
 }
 
+.btn-download {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  color: #ffffff;
+  text-decoration: none;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.btn-download:hover {
+  background: var(--accent-hover);
+}
+
 .hint {
   color: var(--muted);
   font-size: 0.72rem;
