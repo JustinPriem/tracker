@@ -213,6 +213,17 @@ body {
   background: var(--accent-hover);
 }
 
+.zip-link {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.zip-link:hover {
+  color: var(--text);
+}
+
 .hint {
   color: var(--muted);
   font-size: 0.72rem;

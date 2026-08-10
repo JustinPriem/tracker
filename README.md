@@ -11,8 +11,9 @@ Es gibt die App als Windows-Desktop-Programm (Python/tkinter) und als
 reine Browser-Version (HTML/CSS/JS, z.B. über GitHub Pages) – beide mit
 identischem Funktionsumfang.
 
-**📥 [Fertige Windows-Version herunterladen](https://github.com/JustinPriem/tracker/releases/latest)**
-(ZIP entpacken, `Repxo.exe` starten – kein Python nötig)
+**📥 [Repxo für Windows herunterladen](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe)**
+(Installer, kein Python/Admin-Rechte nötig – oder als
+[portable ZIP ohne Installation](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip))
 
 ## Funktionen
 
@@ -81,6 +82,23 @@ immer zusammenbleiben.
 > Selbst-Entpack-Verhalten typisch für Malware-Dropper ist. `--onedir`
 > (Ordner statt Einzeldatei) vermeidet dieses Muster und startet
 > außerdem etwas schneller.
+
+### Installer bauen (empfohlen für die Weitergabe)
+
+Damit Nutzer nur eine einzige Datei herunterladen müssen (statt Ordner +
+`_internal`), gibt es ein [Inno Setup](https://jrsoftware.org/isinfo.php)-
+Skript unter [`installer/repxo.iss`](installer/repxo.iss). Es installiert
+Repxo nach `%LOCALAPPDATA%\Programs\Repxo` (kein Admin/UAC nötig, wie bei
+VS Code/Discord), legt Startmenü- und optional Desktop-Verknüpfung an und
+registriert einen sauberen Eintrag unter "Apps & Features".
+
+```bash
+# Voraussetzung: dist\Repxo\ muss existieren (siehe oben)
+"C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\repxo.iss
+```
+
+Ergebnis: `dist_installer\Repxo-Setup.exe`. Auch hier gilt: unsigniert,
+daher einmalige SmartScreen-Warnung beim ersten Start – siehe oben.
 
 Falls Windows beim ersten Start trotzdem warnt: Über "Weitere
 Informationen" → "Trotzdem ausführen" bestätigen (SmartScreen-Warnung bei
