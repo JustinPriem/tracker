@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 build/
 dist/
+dist_installer/
 *.spec
 .claude/
