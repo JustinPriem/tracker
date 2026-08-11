@@ -20,25 +20,40 @@ from __future__ import annotations
 
 import calendar
 import ctypes
+import http.server
 import json
 import shutil
 import sys
+import threading
 import tkinter as tk
+import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageDraw, ImageTk
+from supabase import Client, create_client
 
 APP_NAME = "Repxo"
 
 DATA_DIR = Path.home() / ".repxo"
 DATA_FILE = DATA_DIR / "data.json"
+SESSION_FILE = DATA_DIR / "session.json"
 
 # Alter Datenordner aus der Zeit vor dem Rebranding zu "Repxo" - wird beim
 # ersten Start automatisch nach DATA_DIR migriert, damit niemand seine
 # bisherigen Klimmzuege verliert.
 LEGACY_DATA_FILE = Path.home() / ".pullup_tracker" / "data.json"
+
+# --- Cloud-Sync (optional) ---------------------------------------------
+# Anmeldung mit Google ueber Supabase synchronisiert die Stats zusaetzlich
+# in die Cloud, damit sie geraeteuebergreifend verfuegbar sind. Ohne Login
+# funktioniert die App unveraendert komplett lokal/offline.
+SUPABASE_URL = "https://yfqatrurllwgegoytgbn.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6ebvJQzvg2_Tf-COMSAPXw_feGjsNE0"
+OAUTH_REDIRECT_PORT = 8765
+OAUTH_REDIRECT_URI = f"http://localhost:{OAUTH_REDIRECT_PORT}/callback"
 
 
 def resource_path(*parts: str) -> Path:
@@ -221,6 +236,98 @@ def save_data(data: dict) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with DATA_FILE.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def save_session(refresh_token: str, email: str) -> None:
+    """Speichert den Refresh-Token, damit der Login einen Neustart uebersteht
+    (separate Datei, damit ein simples Loeschen von session.json zum
+    Abmelden reicht, ohne die eigentlichen Stats anzufassen)."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with SESSION_FILE.open("w", encoding="utf-8") as f:
+        json.dump({"refresh_token": refresh_token, "email": email}, f)
+
+
+def load_session() -> Optional[dict]:
+    if not SESSION_FILE.exists():
+        return None
+    try:
+        with SESSION_FILE.open("r", encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def clear_session() -> None:
+    try:
+        SESSION_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def create_supabase_client() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+
+
+class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
+    """Faengt den OAuth-Redirect von Supabase/Google lokal ab (siehe
+    login_with_google). Der PKCE-Flow liefert den Code als Query-Parameter
+    (anders als beim klassischen Implicit-Flow mit URL-Fragment), der
+    Query-Teil kommt tatsaechlich beim lokalen Server an."""
+
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        self.server.auth_code = params.get("code", [None])[0]
+        self.server.auth_error = params.get("error_description", [None])[0]
+
+        ok = bool(self.server.auth_code)
+        title = "Anmeldung erfolgreich ✓" if ok else "Anmeldung fehlgeschlagen"
+        detail = (
+            "Du kannst dieses Fenster jetzt schließen."
+            if ok
+            else "Bitte dieses Fenster schließen und in Repxo erneut versuchen."
+        )
+        html = (
+            "<html><body style=\"font-family:'Segoe UI',sans-serif;"
+            "text-align:center;padding-top:80px;background:#0d1117;color:#f5f6f7;\">"
+            f"<h2 style=\"color:#ff5722;\">{title}</h2><p>{detail}</p></body></html>"
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(html.encode("utf-8"))
+
+    def log_message(self, format: str, *args) -> None:  # Konsolen-Spam unterdruecken
+        pass
+
+
+def login_with_google(client: Client):
+    """Oeffnet den System-Browser zum Google-Login (via Supabase) und wartet
+    ueber einen kurzlebigen lokalen HTTP-Server auf den Callback.
+
+    Blockiert bis zu 2 Minuten - MUSS in einem Hintergrund-Thread laufen,
+    sonst friert das tkinter-Fenster fuer die Dauer des Logins ein.
+    """
+    server = http.server.HTTPServer(("localhost", OAUTH_REDIRECT_PORT), _OAuthCallbackHandler)
+    server.auth_code = None
+    server.auth_error = None
+
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+
+    res = client.auth.sign_in_with_oauth(
+        {"provider": "google", "options": {"redirect_to": OAUTH_REDIRECT_URI}}
+    )
+    webbrowser.open(res.url)
+
+    thread.join(timeout=120)
+    server.server_close()
+
+    if not server.auth_code:
+        raise RuntimeError(server.auth_error or "Zeitüberschreitung beim Login.")
+
+    auth_response = client.auth.exchange_code_for_session({"auth_code": server.auth_code})
+    return auth_response.session
 
 
 def ensure_taskbar_icon(window: tk.Misc) -> None:
@@ -601,7 +708,7 @@ class HistoryPage(tk.Frame):
 
 
 WINDOW_WIDTH = 270
-WINDOW_HEIGHT = 520
+WINDOW_HEIGHT = 552  # +32 gegenueber vorher, Platz fuer die Account-Zeile
 STAGE_HEIGHT = WINDOW_HEIGHT - TITLE_BAR_HEIGHT
 
 FLIP_STEPS = 10
@@ -637,10 +744,14 @@ class RepxoApp(tk.Tk):
         self.data = load_data()
         self._animating = False
 
+        self.supabase = create_supabase_client()
+        self.cloud_user = None
+
         self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}+{self._startup_x()}+{self._startup_y()}")
 
         self._build_ui()
         self.after(10, lambda: ensure_taskbar_icon(self))
+        self._try_restore_session()
 
     def _startup_x(self) -> int:
         saved = self.data.get("window")
@@ -690,6 +801,31 @@ class RepxoApp(tk.Tk):
         self._refresh_display()
 
     def _build_counter_page(self, content: tk.Frame) -> None:
+        self.account_frame = tk.Frame(content, bg=BG_DARK)
+        self.account_frame.pack(pady=(14, 0))
+
+        self.login_btn = RoundedButton(
+            self.account_frame, text="☁  Mit Google anmelden", command=self.start_login,
+            width=214, height=32, radius=12, font=FONT_BUTTON_SMALL,
+            fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
+            outline=BORDER, outline_width=1, bg_parent=BG_DARK,
+        )
+
+        self.account_info_frame = tk.Frame(self.account_frame, bg=BG_DARK)
+        self.account_email_var = tk.StringVar(value="")
+        tk.Label(
+            self.account_info_frame, textvariable=self.account_email_var,
+            font=FONT_TOTAL, bg=BG_DARK, fg=TEXT_SECONDARY,
+        ).pack(side="left", padx=(0, 8))
+        RoundedButton(
+            self.account_info_frame, text="Abmelden", command=self.logout,
+            width=76, height=26, radius=10, font=(FONT_FAMILY, 8, "bold"),
+            fill=BG_DARK, hover=BG_CARD, text_color=ACCENT_HOVER,
+            bg_parent=BG_DARK,
+        ).pack(side="left")
+
+        self._update_account_ui()
+
         tk.Label(
             content, text=spaced("KLIMMZÜGE"), font=FONT_EYEBROW,
             bg=BG_DARK, fg=ACCENT,
@@ -766,6 +902,120 @@ class RepxoApp(tk.Tk):
             bg_parent=BG_DARK,
         ).pack(side="left")
 
+    # --- Cloud-Login (Google via Supabase) ---------------------------------
+
+    def _run_async(self, fn: Callable[[], object], on_done: Optional[Callable[[object], None]] = None) -> None:
+        """Fuehrt fn() in einem Hintergrund-Thread aus (Netzwerk-Calls duerfen
+        die tkinter-UI nicht blockieren) und ruft on_done(result) danach im
+        Tk-Hauptthread auf (ueber self.after) - Tk-Widgets duerfen nur vom
+        Hauptthread aus angefasst werden."""
+        def worker() -> None:
+            try:
+                result: object = fn()
+            except Exception as exc:  # best effort: Fehler nur melden, nie crashen
+                result = exc
+            if on_done:
+                self.after(0, lambda: on_done(result))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _fetch_cloud_row(self, user_id: str) -> Optional[dict]:
+        res = (
+            self.supabase.table("repxo_stats")
+            .select("*")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        return res.data if res else None
+
+    def _try_restore_session(self) -> None:
+        """Beim Start pruefen, ob ein gespeicherter Login vom letzten Mal
+        existiert, und ihn im Hintergrund stillschweigend erneuern (kein
+        Browser-Popup noetig, nur ein Netzwerk-Call)."""
+        saved = load_session()
+        if not saved:
+            return
+
+        def restore():
+            auth_response = self.supabase.auth.refresh_session(saved["refresh_token"])
+            session = auth_response.session
+            cloud_row = self._fetch_cloud_row(session.user.id)
+            return session, cloud_row
+
+        self._run_async(restore, self._on_login_done)
+
+    def start_login(self) -> None:
+        self.login_btn.set_enabled(False)
+        self.login_btn.set_text("Öffne Browser…")
+
+        def do_login():
+            session = login_with_google(self.supabase)
+            cloud_row = self._fetch_cloud_row(session.user.id)
+            return session, cloud_row
+
+        self._run_async(do_login, self._on_login_done)
+
+    def _on_login_done(self, result: object) -> None:
+        self.login_btn.set_enabled(True)
+        self.login_btn.set_text("☁  Mit Google anmelden")
+
+        if isinstance(result, Exception):
+            print(f"Login fehlgeschlagen: {result}")
+            return
+
+        session, cloud_row = result
+        self.cloud_user = session.user
+        save_session(session.refresh_token, session.user.email or "")
+
+        if cloud_row:
+            self.data["total"] = cloud_row.get("total", self.data["total"])
+            self.data["current_set"] = cloud_row.get("current_set", self.data["current_set"])
+            self.data["log"] = cloud_row.get("log") or []
+            self.data["sets"] = cloud_row.get("sets") or []
+            save_data(self.data)
+        else:
+            self._sync_to_cloud()
+
+        self._update_account_ui()
+        self._refresh_display()
+
+    def logout(self) -> None:
+        client = self.supabase
+        self._run_async(lambda: client.auth.sign_out())
+        clear_session()
+        self.cloud_user = None
+        self._update_account_ui()
+
+    def _update_account_ui(self) -> None:
+        if self.cloud_user:
+            self.login_btn.pack_forget()
+            self.account_email_var.set(self.cloud_user.email or "Angemeldet")
+            self.account_info_frame.pack()
+        else:
+            self.account_info_frame.pack_forget()
+            self.login_btn.pack()
+
+    def _sync_to_cloud(self) -> None:
+        """Schreibt den aktuellen Stand im Hintergrund nach Supabase (best
+        effort - Netzwerkfehler duerfen die App nie blockieren/crashen)."""
+        if not self.cloud_user:
+            return
+        snapshot = dict(self.data)
+        user_id = self.cloud_user.id
+        client = self.supabase
+
+        def push():
+            client.table("repxo_stats").upsert({
+                "user_id": user_id,
+                "total": snapshot["total"],
+                "current_set": snapshot["current_set"],
+                "log": snapshot["log"],
+                "sets": snapshot["sets"],
+                "updated_at": datetime.now().isoformat(),
+            }).execute()
+
+        self._run_async(push)
+
     def _flip_to_page(self, target_widget: tk.Widget, on_swap: Optional[Callable[[], None]] = None) -> None:
         """Karten-Flip: aktuelle Seite schrumpft horizontal zur Mitte zusammen,
         Inhalt wird im schmalsten Moment ausgetauscht, dann waechst die neue
@@ -814,6 +1064,7 @@ class RepxoApp(tk.Tk):
             }
         )
         save_data(self.data)
+        self._sync_to_cloud()
         self._refresh_display()
 
     def finish_set(self) -> None:
@@ -828,6 +1079,7 @@ class RepxoApp(tk.Tk):
         )
         self.data["current_set"] = 0
         save_data(self.data)
+        self._sync_to_cloud()
         self._refresh_display()
 
     def undo(self) -> None:
@@ -844,6 +1096,7 @@ class RepxoApp(tk.Tk):
         else:
             return
         save_data(self.data)
+        self._sync_to_cloud()
         self._refresh_display()
 
     def _last_set_is_today(self) -> bool:

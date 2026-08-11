@@ -13,6 +13,14 @@
       <span class="brand-dot">●</span><span class="brand-name">R E P X O</span>
     </div>
 
+    <div class="account-row" id="accountRow">
+      <button id="loginBtn" class="account-btn">☁ Mit Google anmelden</button>
+      <div id="accountInfo" class="account-info" hidden>
+        <span id="accountEmail" class="account-email"></span>
+        <button id="logoutBtn" class="account-logout">Abmelden</button>
+      </div>
+    </div>
+
     <div class="eyebrow">K L I M M Z Ü G E</div>
 
     <div class="counter" id="counter">0</div>
@@ -75,6 +83,7 @@
     <button id="closeHistory" class="btn btn-secondary">Schließen</button>
   </dialog>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
