@@ -380,4 +380,25 @@ if (window.location.hash.includes("access_token")) {
   });
 }
 
+// --- Downloads-Seitenmenü (nur auf schmalen Bildschirmen sichtbar/nutzbar) ---
+
+const menuToggle = document.getElementById("menuToggle");
+const sidebar = document.getElementById("sidebar");
+const sidebarClose = document.getElementById("sidebarClose");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+
+function openSidebar() {
+  sidebar.classList.add("open");
+  sidebarBackdrop.classList.add("visible");
+}
+
+function closeSidebar() {
+  sidebar.classList.remove("open");
+  sidebarBackdrop.classList.remove("visible");
+}
+
+menuToggle.addEventListener("click", openSidebar);
+sidebarClose.addEventListener("click", closeSidebar);
+sidebarBackdrop.addEventListener("click", closeSidebar);
+
 render();
