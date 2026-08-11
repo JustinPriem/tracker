@@ -457,11 +457,13 @@ const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 function openSidebar() {
   sidebar.classList.add("open");
   sidebarBackdrop.classList.add("visible");
+  menuToggle.classList.add("is-hidden");
 }
 
 function closeSidebar() {
   sidebar.classList.remove("open");
   sidebarBackdrop.classList.remove("visible");
+  menuToggle.classList.remove("is-hidden");
 }
 
 menuToggle.addEventListener("click", openSidebar);
