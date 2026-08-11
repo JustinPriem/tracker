@@ -348,10 +348,19 @@ async function updateAccountUI(session) {
   }
 }
 
+function currentPageUrl() {
+  // Normalisiert auf einen abschliessenden "/", damit die Redirect-URL
+  // immer exakt mit dem in Supabase hinterlegten Eintrag matcht, egal ob
+  // die Seite mit oder ohne trailing slash aufgerufen wurde.
+  let url = window.location.origin + window.location.pathname;
+  if (!url.endsWith("/")) url += "/";
+  return url;
+}
+
 loginBtn.addEventListener("click", async () => {
   await sb.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: { redirectTo: currentPageUrl() },
   });
 });
 
