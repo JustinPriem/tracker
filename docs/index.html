@@ -39,18 +39,22 @@
       </span>
     </a>
 
-    <div class="download-item download-item-disabled">
+    <a
+      class="download-item"
+      href="https://github.com/JustinPriem/tracker/releases/latest/download/Repxo.apk"
+    >
       <span class="download-icon">🤖</span>
       <span class="download-text">
-        <span class="download-label">Android <span class="badge-soon">folgt</span></span>
-        <span class="download-sub">APK</span>
+        <span class="download-label">Android</span>
+        <span class="download-sub">APK, manuell installieren</span>
       </span>
-    </div>
+    </a>
 
     <p class="sidebar-hint">
       Windows SmartScreen kann beim ersten Start warnen (unsigniertes
       Programm) – über „Weitere Informationen“ → „Trotzdem ausführen“
-      bestätigen.
+      bestätigen. Android fragt beim APK-Install ähnlich nach
+      „Unbekannte Quellen zulassen“.
     </p>
   </aside>
 
@@ -115,7 +119,7 @@
     <button id="closeHistory" class="btn btn-secondary">Schließen</button>
   </dialog>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

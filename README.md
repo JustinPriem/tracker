@@ -7,13 +7,15 @@ Titelleiste, angelehnt an Overlay-Programme wie Overwolf.
 > **Der Name:** REP für Wiederholungen (Repetitions), XO als Verweis auf
 > den Computer/das System.
 
-Es gibt die App als Windows-Desktop-Programm (Python/tkinter) und als
-reine Browser-Version (HTML/CSS/JS, z.B. über GitHub Pages) – beide mit
-identischem Funktionsumfang.
+Es gibt die App als Windows-Desktop-Programm (Python/tkinter), als
+Android-App und als reine Browser-Version (HTML/CSS/JS, z.B. über
+GitHub Pages) – alle mit identischem Funktionsumfang und Design.
 
-**📥 [Repxo für Windows herunterladen](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe)**
-(Installer, kein Python/Admin-Rechte nötig – oder als
-[portable ZIP ohne Installation](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip))
+**📥 Downloads** (auf der Website links in der Sidebar, am Handy im
+Seitenmenü – oder direkt hier):
+[Windows-Installer](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe) ·
+[Windows portable ZIP](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip) ·
+[Android APK](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo.apk)
 
 ## Funktionen
 
@@ -126,6 +128,51 @@ daher einmalige SmartScreen-Warnung beim ersten Start – siehe oben.
 Falls Windows beim ersten Start trotzdem warnt: Über "Weitere
 Informationen" → "Trotzdem ausführen" bestätigen (SmartScreen-Warnung bei
 unsignierten Programmen ist normal).
+
+## Android-Version
+
+Statt die App nochmal nativ zu bauen, wird die Browser-Version (`docs/`)
+per [Capacitor](https://capacitorjs.com) in eine native Android-Huelle
+gepackt (`android-app/`) – gleiches Design, gleicher Code, keine doppelte
+Pflege der UI. Die Web-Inhalte werden dabei **fest in die APK eingepackt**
+(offline nutzbar, wie die Windows-Version) statt live von der Website
+geladen zu werden.
+
+### Voraussetzungen
+
+- [Node.js](https://nodejs.org) (LTS)
+- [JDK 21](https://adoptium.net) (neuere Capacitor-Versionen brauchen
+  explizit 21, nicht 17)
+- [Android SDK Command-line Tools](https://developer.android.com/studio#command-line-tools-only)
+  mit installiertem `platform-tools`, `platforms;android-34` und
+  `build-tools;34.0.0` (kein volles Android Studio nötig)
+
+### Bauen
+
+```bash
+# Website-Inhalte in den Capacitor-Ordner kopieren (Quelle: docs/)
+cp -r docs/* android-app/www/
+
+cd android-app
+npm install
+npx cap sync android
+cd android
+./gradlew.bat assembleDebug
+```
+
+Ergebnis: `android-app/android/app/build/outputs/apk/debug/app-debug.apk`
+(Debug-signiert, für Sideload/Weitergabe außerhalb des Play Store völlig
+ausreichend – vergleichbar mit der unsignierten Windows-.exe).
+
+Icon/Splash-Screen liegen als Quellbilder in `android-app/resources/` und
+werden bei Bedarf über `npx @capacitor/assets generate --android` neu für
+alle Auflösungen generiert.
+
+### Installieren
+
+APK herunterladen, auf dem Handy öffnen, bei der Sicherheitsabfrage
+"Unbekannte Quellen zulassen" bestätigen (kein Play-Store-Release, daher
+wie bei der Windows-.exe eine einmalige Warnung normal).
 
 ## Browser-Version (GitHub Pages)
 
