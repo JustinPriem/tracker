@@ -1,7 +1,9 @@
 // Repxo (Browser-Version) – Klimmzug-Tracker
-// Speichert Daten lokal im Browser (localStorage). Keine Anmeldung, kein
-// Server nötig; Daten bleiben nach Neustart erhalten, sind aber an diesen
-// einen Browser auf diesem einen Gerät gebunden.
+// Speichert Daten lokal im Browser (localStorage) - funktioniert komplett
+// ohne Login. Optional: Anmeldung mit Google (via Supabase) synchronisiert
+// die Stats zusätzlich in die Cloud, damit sie geräteübergreifend
+// verfügbar sind. Lokal bleibt dabei immer die schnelle, offline-fähige
+// Quelle; die Cloud wird nur im Hintergrund nachgezogen.
 //
 // Datenmodell (analog zur Desktop-Version):
 // - total: Gesamtanzahl Klimmzüge aller Zeiten
@@ -11,6 +13,12 @@
 
 const STORAGE_KEY = "repxoData";
 const LEGACY_STORAGE_KEY = "pullupTrackerData"; // vor dem Rebranding zu Repxo
+
+const SUPABASE_URL = "https://yfqatrurllwgegoytgbn.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6ebvJQzvg2_Tf-COMSAPXw_feGjsNE0";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+let currentUser = null;
 
 function loadData() {
   try {
@@ -39,6 +47,53 @@ function loadData() {
 
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  pushToCloud();
+}
+
+async function pushToCloud() {
+  if (!currentUser) return;
+  try {
+    const { error } = await sb.from("repxo_stats").upsert({
+      user_id: currentUser.id,
+      total: data.total,
+      current_set: data.currentSet,
+      log: data.log,
+      sets: data.sets,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) console.warn("Cloud-Sync fehlgeschlagen:", error.message);
+  } catch (err) {
+    console.warn("Cloud-Sync fehlgeschlagen:", err);
+  }
+}
+
+async function pullFromCloud(user) {
+  try {
+    const { data: row, error } = await sb
+      .from("repxo_stats")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error) {
+      console.warn("Cloud-Daten konnten nicht geladen werden:", error.message);
+      return;
+    }
+    if (row) {
+      data = {
+        total: row.total,
+        currentSet: row.current_set,
+        log: row.log || [],
+        sets: row.sets || [],
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } else {
+      // Erster Login, noch keine Cloud-Zeile - lokale (Gast-)Daten hochladen.
+      await pushToCloud();
+    }
+    render();
+  } catch (err) {
+    console.warn("Cloud-Daten konnten nicht geladen werden:", err);
+  }
 }
 
 let data = loadData();
@@ -57,6 +112,10 @@ const weekdayRow = document.getElementById("weekdayRow");
 const calendarGrid = document.getElementById("calendarGrid");
 const prevMonthBtn = document.getElementById("prevMonth");
 const nextMonthBtn = document.getElementById("nextMonth");
+const loginBtn = document.getElementById("loginBtn");
+const accountInfo = document.getElementById("accountInfo");
+const accountEmail = document.getElementById("accountEmail");
+const logoutBtn = document.getElementById("logoutBtn");
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const MIN_CIRCLE_SIZE = 26;
@@ -272,5 +331,44 @@ nextMonthBtn.addEventListener("click", () => {
   calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
   renderCalendar();
 });
+
+// --- Cloud-Login (Google via Supabase) ---
+
+async function updateAccountUI(session) {
+  if (session && session.user) {
+    currentUser = session.user;
+    loginBtn.hidden = true;
+    accountInfo.hidden = false;
+    accountEmail.textContent = session.user.email || "Angemeldet";
+    await pullFromCloud(session.user);
+  } else {
+    currentUser = null;
+    loginBtn.hidden = false;
+    accountInfo.hidden = true;
+  }
+}
+
+loginBtn.addEventListener("click", async () => {
+  await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await sb.auth.signOut();
+});
+
+sb.auth.onAuthStateChange((_event, session) => {
+  updateAccountUI(session);
+});
+
+// Nach dem OAuth-Redirect haengt ein #access_token=... in der URL - aus der
+// Adressleiste entfernen, sobald Supabase die Session daraus gelesen hat.
+if (window.location.hash.includes("access_token")) {
+  sb.auth.getSession().then(() => {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  });
+}
 
 render();

@@ -30,6 +30,9 @@ identischem Funktionsumfang.
   Tag die einzelnen Sätze auf (z.B. `3 Sätze: 8 · 3 · 8 = 19 Klimmzüge`)
 - Alle Daten (Gesamtzähler, Klick-Verlauf, abgeschlossene Sätze) werden
   dauerhaft gespeichert und überstehen einen Neustart
+- **☁ Optionaler Cloud-Sync:** Anmeldung mit Google synchronisiert die
+  Stats geräteübergreifend (Desktop-App + Browser). Ohne Login läuft alles
+  wie gehabt rein lokal/offline weiter.
 
 ## Desktop-Version (Windows)
 
@@ -38,9 +41,11 @@ identischem Funktionsumfang.
 - Windows mit installiertem [Python 3](https://www.python.org/downloads/)
   (bei der Installation den Haken bei "Add python.exe to PATH" setzen)
 - Die Bildbibliothek [Pillow](https://pypi.org/project/Pillow/) für
-  kantengeglättete (Anti-Aliasing) Rundungen:
+  kantengeglättete (Anti-Aliasing) Rundungen, und der
+  [Supabase](https://pypi.org/project/supabase/)-Client für den optionalen
+  Cloud-Sync:
   ```bash
-  pip install pillow
+  pip install pillow supabase
   ```
 
 ### Starten
@@ -64,6 +69,24 @@ werden gespeichert unter:
 Die Datei kann bei Bedarf gelöscht werden, um komplett von vorne zu
 beginnen. Daten aus der Zeit vor dem Rebranding (`%USERPROFILE%\.pullup_tracker`)
 werden beim ersten Start automatisch übernommen.
+
+Bei aktivem Cloud-Login liegt zusätzlich `%USERPROFILE%\.repxo\session.json`
+(nur der Refresh-Token, keine Passwörter) – diese Datei löschen entspricht
+einem lokalen Abmelden.
+
+### Cloud-Sync (optional)
+
+Über **☁ Mit Google anmelden** werden die Stats zusätzlich in einer
+[Supabase](https://supabase.com)-Datenbank gespeichert und geräteübergreifend
+synchronisiert (Desktop + Browser, gleiches Konto). Technisch:
+
+- Login via Google-OAuth (PKCE-Flow); die Desktop-App öffnet dafür kurz den
+  System-Browser und fängt den Redirect über einen lokalen HTTP-Server auf
+  `localhost:8765` ab (ähnliches Prinzip wie `gh auth login --web`)
+- Lokale Datei bleibt immer die schnelle, offline-fähige Quelle – jede
+  Änderung wird zuerst lokal gespeichert und danach im Hintergrund
+  hochgeladen (Netzwerkfehler blockieren die App nie)
+- Ohne Login: keine Netzwerk-Calls, alles wie zuvor rein lokal
 
 ### Als eigenständige .exe bauen
 
@@ -111,13 +134,15 @@ Repxo – funktioniert in jedem modernen Browser, ganz ohne Python,
 mit identischem Design und Funktionsumfang wie die Desktop-Version
 (Sätze, Rückgängig-Verhalten, Kalender mit Satz-Aufschlüsselung).
 
-**Datenspeicherung:** Die Werte werden per `localStorage` direkt im
-Browser gespeichert – keine Anmeldung, kein Server. Die Daten bleiben
-nach Schließen des Browsers und nach einem PC-Neustart erhalten,
+**Datenspeicherung:** Standardmäßig werden die Werte per `localStorage`
+direkt im Browser gespeichert – keine Anmeldung, kein Server. Die Daten
+bleiben nach Schließen des Browsers und nach einem PC-Neustart erhalten,
 solange niemand die Browserdaten löscht. Sie sind allerdings an genau
 diesen Browser auf genau diesem Gerät gebunden (kein Abgleich zwischen
 Geräten/Browsern, im Inkognito-Modus gehen die Daten beim Schließen
-verloren).
+verloren) – **außer** man meldet sich oben mit **☁ Google** an, dann
+werden die Stats zusätzlich in der Cloud gespeichert und sind auf jedem
+Gerät verfügbar (siehe "Cloud-Sync" oben bei der Desktop-Version).
 
 ### Auf GitHub Pages veröffentlichen
 
