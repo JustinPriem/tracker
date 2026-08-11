@@ -16,7 +16,12 @@ const LEGACY_STORAGE_KEY = "pullupTrackerData"; // vor dem Rebranding zu Repxo
 
 const SUPABASE_URL = "https://yfqatrurllwgegoytgbn.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6ebvJQzvg2_Tf-COMSAPXw_feGjsNE0";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Defensiv: falls supabase.min.js aus irgendeinem Grund nicht laedt (z.B.
+// kein Internet beim ersten Start der Android-App), soll wenigstens das
+// lokale Tracking weiterhin funktionieren statt die ganze Seite zu crashen.
+const sb = typeof supabase !== "undefined"
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
 
 let currentUser = null;
 
@@ -357,27 +362,34 @@ function currentPageUrl() {
   return url;
 }
 
-loginBtn.addEventListener("click", async () => {
-  await sb.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: currentPageUrl() },
+if (sb) {
+  loginBtn.addEventListener("click", async () => {
+    await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: currentPageUrl() },
+    });
   });
-});
 
-logoutBtn.addEventListener("click", async () => {
-  await sb.auth.signOut();
-});
-
-sb.auth.onAuthStateChange((_event, session) => {
-  updateAccountUI(session);
-});
-
-// Nach dem OAuth-Redirect haengt ein #access_token=... in der URL - aus der
-// Adressleiste entfernen, sobald Supabase die Session daraus gelesen hat.
-if (window.location.hash.includes("access_token")) {
-  sb.auth.getSession().then(() => {
-    history.replaceState(null, "", window.location.pathname + window.location.search);
+  logoutBtn.addEventListener("click", async () => {
+    await sb.auth.signOut();
   });
+
+  sb.auth.onAuthStateChange((_event, session) => {
+    updateAccountUI(session);
+  });
+
+  // Nach dem OAuth-Redirect haengt ein #access_token=... in der URL - aus
+  // der Adressleiste entfernen, sobald Supabase die Session daraus gelesen hat.
+  if (window.location.hash.includes("access_token")) {
+    sb.auth.getSession().then(() => {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    });
+  }
+} else {
+  // Cloud-Bibliothek konnte nicht geladen werden (z.B. offline) - Button
+  // ausblenden, App funktioniert ansonsten unveraendert rein lokal weiter.
+  console.warn("Supabase konnte nicht geladen werden - Cloud-Sync deaktiviert.");
+  loginBtn.hidden = true;
 }
 
 // --- Downloads-Seitenmenü (nur auf schmalen Bildschirmen sichtbar/nutzbar) ---
