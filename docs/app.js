@@ -362,12 +362,61 @@ function currentPageUrl() {
   return url;
 }
 
+// In der nativen Android-App (Capacitor) laeuft die Seite unter einer
+// lokalen capacitor://-URL, nicht unter der echten Website-Adresse - ein
+// normaler Redirect wuerde daher ins Leere laufen (siehe Bugreport: "komme
+// nicht zurueck in die App"). Ausserdem verweigert Google Sign-in generell
+// in eingebetteten WebViews. Deshalb: Login-Seite explizit im System-
+// Browser (Custom Tab) oeffnen und ueber einen eigenen Deep-Link
+// (repxo://callback) wieder zurueck in die App leiten.
+const NATIVE_OAUTH_REDIRECT = "repxo://callback";
+const isNativeApp = !!(
+  window.Capacitor &&
+  window.Capacitor.isNativePlatform &&
+  window.Capacitor.isNativePlatform()
+);
+
+async function handleOAuthCallbackUrl(urlString) {
+  try {
+    const url = new URL(urlString);
+    if (url.hash && url.hash.includes("access_token")) {
+      // Implicit-Flow: Tokens stehen im Fragment.
+      const params = new URLSearchParams(url.hash.substring(1));
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+      if (access_token && refresh_token) {
+        await sb.auth.setSession({ access_token, refresh_token });
+      }
+    } else if (url.searchParams.get("code")) {
+      // PKCE-Flow: Code als Query-Parameter, wird gegen die Session getauscht.
+      await sb.auth.exchangeCodeForSession(url.searchParams.get("code"));
+    }
+  } catch (err) {
+    console.warn("OAuth-Callback konnte nicht verarbeitet werden:", err);
+  }
+  if (window.Capacitor.Plugins.Browser) {
+    window.Capacitor.Plugins.Browser.close().catch(() => {});
+  }
+}
+
 if (sb) {
   loginBtn.addEventListener("click", async () => {
-    await sb.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: currentPageUrl() },
-    });
+    if (isNativeApp) {
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true },
+      });
+      if (!error && data && data.url) {
+        await window.Capacitor.Plugins.Browser.open({ url: data.url });
+      } else if (error) {
+        console.warn("Login fehlgeschlagen:", error.message);
+      }
+    } else {
+      await sb.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: currentPageUrl() },
+      });
+    }
   });
 
   logoutBtn.addEventListener("click", async () => {
@@ -378,9 +427,15 @@ if (sb) {
     updateAccountUI(session);
   });
 
-  // Nach dem OAuth-Redirect haengt ein #access_token=... in der URL - aus
-  // der Adressleiste entfernen, sobald Supabase die Session daraus gelesen hat.
-  if (window.location.hash.includes("access_token")) {
+  if (isNativeApp) {
+    window.Capacitor.Plugins.App.addListener("appUrlOpen", (event) => {
+      if (event.url && event.url.startsWith(NATIVE_OAUTH_REDIRECT)) {
+        handleOAuthCallbackUrl(event.url);
+      }
+    });
+  } else if (window.location.hash.includes("access_token")) {
+    // Nach dem OAuth-Redirect haengt ein #access_token=... in der URL - aus
+    // der Adressleiste entfernen, sobald Supabase die Session daraus gelesen hat.
     sb.auth.getSession().then(() => {
       history.replaceState(null, "", window.location.pathname + window.location.search);
     });
