@@ -8,6 +8,52 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <button id="menuToggle" class="menu-toggle" aria-label="Downloads öffnen">☰</button>
+  <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">D O W N L O A D S</span>
+      <button id="sidebarClose" class="sidebar-close" aria-label="Menü schließen">✕</button>
+    </div>
+
+    <a
+      class="download-item"
+      href="https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe"
+    >
+      <span class="download-icon">🪟</span>
+      <span class="download-text">
+        <span class="download-label">Windows</span>
+        <span class="download-sub">Installer (.exe)</span>
+      </span>
+    </a>
+
+    <a
+      class="download-item"
+      href="https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip"
+    >
+      <span class="download-icon">🗜️</span>
+      <span class="download-text">
+        <span class="download-label">ZIP</span>
+        <span class="download-sub">Portable, ohne Installation</span>
+      </span>
+    </a>
+
+    <div class="download-item download-item-disabled">
+      <span class="download-icon">🤖</span>
+      <span class="download-text">
+        <span class="download-label">Android <span class="badge-soon">folgt</span></span>
+        <span class="download-sub">APK</span>
+      </span>
+    </div>
+
+    <p class="sidebar-hint">
+      Windows SmartScreen kann beim ersten Start warnen (unsigniertes
+      Programm) – über „Weitere Informationen“ → „Trotzdem ausführen“
+      bestätigen.
+    </p>
+  </aside>
+
   <main class="card">
     <div class="brand-row">
       <span class="brand-dot">●</span><span class="brand-name">R E P X O</span>
@@ -50,20 +96,6 @@
     <p class="hint">
       Deine Daten werden nur lokal in diesem Browser gespeichert (kein
       Login, kein Server) und bleiben auch nach Neustart erhalten.
-    </p>
-
-    <div class="divider"></div>
-
-    <a
-      class="btn btn-download"
-      href="https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe"
-    >⬇ Für Windows herunterladen</a>
-    <p class="hint">
-      Installer ausführen – kein Python nötig, keine Admin-Rechte
-      erforderlich. Windows SmartScreen kann beim ersten Start warnen
-      (unsigniertes Programm) – über „Weitere Informationen“ →
-      „Trotzdem ausführen“ bestätigen.
-      <a class="zip-link" href="https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip">Portable ZIP ohne Installation</a>
     </p>
   </main>
 
