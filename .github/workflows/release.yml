@@ -1,0 +1,124 @@
+name: Release
+
+# Baut bei jedem Versions-Tag (z.B. "v1.1.0") automatisch:
+#   - Windows-Installer (Repxo-Setup.exe) + portables ZIP (Repxo-Windows.zip)
+#   - Android-APK (Repxo.apk)
+# und veroeffentlicht sie als GitHub-Release-Assets. Die Auto-Update-Pruefung
+# in repxo.py und der Android-App fragt genau diesen "latest release" ab.
+#
+# Neue Version veroeffentlichen:
+#   1. APP_VERSION in repxo.py, APP_VERSION in docs/app.js,
+#      MyAppVersion in installer/repxo.iss und versionCode/versionName in
+#      android-app/android/app/build.gradle passend hochzaehlen
+#   2. git tag vX.Y.Z && git push origin vX.Y.Z
+#   3. Dieser Workflow baut alles automatisch und legt das Release an
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python-Abhaengigkeiten installieren
+        run: pip install pillow supabase pyinstaller
+
+      - name: Mit PyInstaller bauen
+        run: pyinstaller --onedir --noconsole --name "Repxo" --icon assets\icon.ico --add-data "assets;assets" repxo.py
+
+      - name: Portables ZIP erstellen
+        run: Compress-Archive -Path dist\Repxo -DestinationPath Repxo-Windows.zip
+
+      - name: Installer mit Inno Setup bauen
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\repxo.iss'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            Repxo-Windows.zip
+            dist_installer\Repxo-Setup.exe
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android-SDK-Pakete installieren
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Web-Inhalte in den Capacitor-Ordner kopieren
+        run: |
+          mkdir -p android-app/www
+          cp -r docs/* android-app/www/
+
+      - name: npm-Abhaengigkeiten installieren
+        working-directory: android-app
+        run: npm install
+
+      - name: Capacitor synchronisieren
+        working-directory: android-app
+        run: npx cap sync android
+
+      - name: APK bauen
+        working-directory: android-app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: APK umbenennen
+        run: cp android-app/android/app/build/outputs/apk/debug/app-debug.apk Repxo.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: Repxo.apk
+
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: windows-build
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-build
+          path: android-build
+
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Repxo ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            windows-build/Repxo-Windows.zip
+            windows-build/dist_installer/Repxo-Setup.exe
+            android-build/Repxo.apk

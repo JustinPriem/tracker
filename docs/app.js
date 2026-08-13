@@ -14,6 +14,14 @@
 const STORAGE_KEY = "repxoData";
 const LEGACY_STORAGE_KEY = "pullupTrackerData"; // vor dem Rebranding zu Repxo
 
+// Muss zu jedem Release passend mit hochgezaehlt werden (siehe
+// android-app/android/app/build.gradle versionName und
+// installer/repxo.iss MyAppVersion) - wird nur fuer den Auto-Update-Check
+// der nativen Android-App verwendet (siehe checkForUpdate unten), die
+// Website selbst ist ueber GitHub Pages ohnehin immer aktuell.
+const APP_VERSION = "1.1.0";
+const LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/tracker/releases/latest";
+
 const SUPABASE_URL = "https://yfqatrurllwgegoytgbn.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6ebvJQzvg2_Tf-COMSAPXw_feGjsNE0";
 // Defensiv: falls supabase.min.js aus irgendeinem Grund nicht laedt (z.B.
@@ -376,6 +384,59 @@ const isNativeApp = !!(
   window.Capacitor.isNativePlatform()
 );
 
+// --- Auto-Update-Check (nur native Android-App, gegen GitHub Releases) ---
+
+const updateBanner = document.getElementById("updateBanner");
+let updateUrl = null;
+
+function parseVersion(version) {
+  return version
+    .trim()
+    .replace(/^v/, "")
+    .split(".")
+    .map((piece) => parseInt(piece, 10) || 0);
+}
+
+function isNewerVersion(remote, local) {
+  const a = parseVersion(remote);
+  const b = parseVersion(local);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff !== 0) return diff > 0;
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  // Die Website ist ueber GitHub Pages immer aktuell - die Pruefung ist nur
+  // fuer die native App relevant, deren Inhalte fest in der APK stecken.
+  if (!isNativeApp) return;
+  try {
+    const res = await fetch(LATEST_RELEASE_API_URL, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return;
+    const release = await res.json();
+    const latest = release.tag_name || "";
+    if (latest && isNewerVersion(latest, APP_VERSION)) {
+      updateUrl = release.html_url;
+      updateBanner.textContent = `🔄 Update ${latest} verfügbar`;
+      updateBanner.hidden = false;
+    }
+  } catch (err) {
+    console.warn("Update-Check fehlgeschlagen:", err); // z.B. kein Internet
+  }
+}
+
+updateBanner.addEventListener("click", () => {
+  if (!updateUrl) return;
+  if (isNativeApp && window.Capacitor.Plugins.Browser) {
+    window.Capacitor.Plugins.Browser.open({ url: updateUrl });
+  } else {
+    window.open(updateUrl, "_blank");
+  }
+});
+
 async function handleOAuthCallbackUrl(urlString) {
   try {
     const url = new URL(urlString);
@@ -471,3 +532,4 @@ sidebarClose.addEventListener("click", closeSidebar);
 sidebarBackdrop.addEventListener("click", closeSidebar);
 
 render();
+checkForUpdate();

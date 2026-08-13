@@ -451,6 +451,25 @@ body {
   margin: 0;
 }
 
+.update-banner {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: var(--accent-hover);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
 dialog {
   border: 1px solid var(--border);
   border-radius: 18px;
