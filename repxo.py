@@ -26,6 +26,8 @@ import shutil
 import sys
 import threading
 import tkinter as tk
+import urllib.error
+import urllib.request
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
@@ -36,6 +38,11 @@ from PIL import Image, ImageDraw, ImageTk
 from supabase import Client, create_client
 
 APP_NAME = "Repxo"
+APP_VERSION = "1.1.0"
+
+# --- Auto-Update-Check (gegen GitHub Releases) --------------------------
+LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/tracker/releases/latest"
+UPDATE_CHECK_TIMEOUT = 4  # Sekunden
 
 DATA_DIR = Path.home() / ".repxo"
 DATA_FILE = DATA_DIR / "data.json"
@@ -62,6 +69,32 @@ def resource_path(*parts: str) -> Path:
     sys._MEIPASS statt neben dem Skript)."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
     return base.joinpath(*parts)
+
+
+def _parse_version(version: str) -> tuple[int, ...]:
+    parts = []
+    for piece in version.strip().lstrip("v").split("."):
+        try:
+            parts.append(int(piece))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts)
+
+
+def fetch_latest_release() -> Optional[dict]:
+    """Fragt den neuesten GitHub-Release ab (Tag-Name + Release-Seite).
+
+    Laeuft blockierend - MUSS ueber _run_async in einem Hintergrund-Thread
+    aufgerufen werden. Netzwerkfehler werden bewusst nach oben durchgereicht
+    (der Aufrufer/_run_async faengt Exceptions ab und ignoriert sie dann).
+    """
+    request = urllib.request.Request(
+        LATEST_RELEASE_API_URL,
+        headers={"Accept": "application/vnd.github+json"},
+    )
+    with urllib.request.urlopen(request, timeout=UPDATE_CHECK_TIMEOUT) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return {"version": payload.get("tag_name", ""), "url": payload.get("html_url", "")}
 
 
 def _migrate_legacy_data() -> None:
@@ -752,6 +785,7 @@ class RepxoApp(tk.Tk):
         self._build_ui()
         self.after(10, lambda: ensure_taskbar_icon(self))
         self._try_restore_session()
+        self._run_async(fetch_latest_release, self._on_update_check_done)
 
     def _startup_x(self) -> int:
         saved = self.data.get("window")
@@ -901,6 +935,29 @@ class RepxoApp(tk.Tk):
             fill=ACCENT_DIM, hover=BORDER, text_color=ACCENT_HOVER,
             bg_parent=BG_DARK,
         ).pack(side="left")
+
+        self.update_label = tk.Label(
+            content, text="", font=(FONT_FAMILY, 8, "bold", "underline"),
+            bg=BG_DARK, fg=ACCENT_HOVER, cursor="hand2",
+        )
+        self.update_label.bind("<Button-1>", self._open_update_page)
+
+    # --- Auto-Update-Check (gegen GitHub Releases) --------------------------
+
+    def _on_update_check_done(self, result: object) -> None:
+        if isinstance(result, Exception) or not result:
+            return  # kein Internet / GitHub nicht erreichbar -> einfach ignorieren
+        latest_version = result["version"]
+        if _parse_version(latest_version) > _parse_version(APP_VERSION):
+            self._show_update_banner(latest_version, result["url"])
+
+    def _show_update_banner(self, latest_version: str, url: str) -> None:
+        self._update_url = url
+        self.update_label.config(text=f"🔄 Update {latest_version} verfügbar")
+        self.update_label.pack(pady=(10, 0))
+
+    def _open_update_page(self, _event: Optional[tk.Event] = None) -> None:
+        webbrowser.open(self._update_url)
 
     # --- Cloud-Login (Google via Supabase) ---------------------------------
 

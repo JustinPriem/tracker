@@ -90,6 +90,19 @@ synchronisiert (Desktop + Browser, gleiches Konto). Technisch:
   hochgeladen (Netzwerkfehler blockieren die App nie)
 - Ohne Login: keine Netzwerk-Calls, alles wie zuvor rein lokal
 
+### Automatische Update-Prüfung
+
+Beim Start prüft die App im Hintergrund den neuesten
+[GitHub-Release](https://github.com/JustinPriem/tracker/releases/latest)
+gegen die eigene Version. Gibt es eine neuere, erscheint unten ein kleiner
+Hinweis "🔄 Update x.y.z verfügbar" – ein Klick öffnet die Release-Seite
+im Browser, von wo aus sich der neue Installer/ZIP herunterladen lässt.
+Die Android-App macht dasselbe (nur dort, nicht auf der Website – die ist
+über GitHub Pages ohnehin immer aktuell) und öffnet den APK-Download.
+
+Kein Internet oder GitHub nicht erreichbar? Wird stillschweigend
+ignoriert, die App startet ganz normal ohne Verzögerung.
+
 ### Als eigenständige .exe bauen
 
 ```bash
@@ -128,6 +141,30 @@ daher einmalige SmartScreen-Warnung beim ersten Start – siehe oben.
 Falls Windows beim ersten Start trotzdem warnt: Über "Weitere
 Informationen" → "Trotzdem ausführen" bestätigen (SmartScreen-Warnung bei
 unsignierten Programmen ist normal).
+
+## Neue Version veröffentlichen (automatisch per GitHub Actions)
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) baut bei
+jedem Versions-Tag automatisch Windows-Installer, portables ZIP **und**
+Android-APK und veröffentlicht sie als GitHub-Release-Assets – manuelles
+Bauen/Hochladen (wie oben beschrieben) ist damit nur noch zum lokalen
+Testen nötig.
+
+1. Version an vier Stellen passend hochzählen:
+   - `APP_VERSION` in [`repxo.py`](repxo.py)
+   - `APP_VERSION` in [`docs/app.js`](docs/app.js)
+   - `MyAppVersion` in [`installer/repxo.iss`](installer/repxo.iss)
+   - `versionCode` (immer nur hochzählen, nie runter) und `versionName` in
+     [`android-app/android/app/build.gradle`](android-app/android/app/build.gradle)
+2. Tag pushen:
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+3. Der Workflow baut alles und legt ein neues Release
+   `https://github.com/JustinPriem/tracker/releases/tag/v1.2.0` mit allen
+   drei Dateien an. Die Auto-Update-Prüfung (siehe oben) findet es dann
+   automatisch.
 
 ## Android-Version
 
