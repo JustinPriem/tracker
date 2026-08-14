@@ -64,6 +64,9 @@ if __name__ == "__main__":
         except AttributeError as exc:
             failures += 1
             print(f"FAIL {test.__name__}: {exc}")
+        except TypeError as exc:
+            failures += 1
+            print(f"FAIL {test.__name__}: {exc}")
     if failures:
         print(f"\n{failures} Test(s) fehlgeschlagen")
         sys.exit(1)
