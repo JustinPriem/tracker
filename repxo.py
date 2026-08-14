@@ -113,8 +113,10 @@ MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
-MIN_CIRCLE_RADIUS = 10
-MAX_CIRCLE_RADIUS = 15
+EMPTY_DAY_RADIUS = 10  # fester Radius fuer den duennen Umriss-Kreis an Tagen ohne Eintraege (unveraendert ggue. vorher)
+MAX_CIRCLE_RADIUS = 20  # Radius bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen - volle Groesse (Durchmesser 40px)
+REPS_FOR_FULL_SIZE = 50  # Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
+MIN_RENDER_RADIUS = 2  # rein technischer Mindestwert (kein visueller Floor), verhindert ein 0px-Bild bei sehr kleinen aber >0 Werten
 
 CELL_SIZE = 34  # muss inkl. Padding in die 270px breite Buehne passen (7 Spalten)
 HEADER_HEIGHT = 22
@@ -221,19 +223,23 @@ def render_circle(
     return ImageTk.PhotoImage(img)
 
 
-def value_to_radius(value: int, max_value: int) -> int:
-    """Bestimmt den Kreisradius abhaengig von der Tages-Anzahl."""
-    if not value or max_value <= 0:
-        return MIN_CIRCLE_RADIUS
-    ratio = min(value / max_value, 1)
-    return round(MIN_CIRCLE_RADIUS + ratio * (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS))
+def value_to_radius(value: int) -> int:
+    """Bestimmt den Kreisradius anhand einer absoluten Skala: bei
+    REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen an einem Tag ist der Kreis
+    auf 100% (MAX_CIRCLE_RADIUS), linear interpoliert darunter - bewusst
+    OHNE sichtbaren Mindestwert (nur MIN_RENDER_RADIUS als rein technische
+    Untergrenze gegen ein 0px-Bild). Nur fuer value > 0 aufrufen - Tage
+    ohne Eintraege nutzen stattdessen direkt EMPTY_DAY_RADIUS."""
+    ratio = min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE
+    return max(MIN_RENDER_RADIUS, round(ratio * MAX_CIRCLE_RADIUS))
 
 
-def value_to_color(value: int, max_value: int) -> str:
-    """Interpoliert zwischen gedaempftem und leuchtendem Orange (Heatmap-Look)."""
+def value_to_color(value: int) -> str:
+    """Interpoliert zwischen gedaempftem und leuchtendem Orange (Heatmap-Look),
+    auf derselben absoluten REPS_FOR_FULL_SIZE-Skala wie value_to_radius."""
     low = (58, 31, 20)      # dunkles Glut-Orange
     high = (255, 87, 34)    # helles Flammen-Orange (ACCENT)
-    ratio = min(value / max_value, 1) if max_value > 0 else 1
+    ratio = min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE
     rgb = tuple(round(lo + (hi - lo) * ratio) for lo, hi in zip(low, high))
     return "#%02x%02x%02x" % rgb
 
@@ -684,7 +690,6 @@ class HistoryPage(tk.Frame):
 
         daily_totals = self._daily_totals()
         daily_sets = self._daily_sets()
-        max_value = max(daily_totals.values(), default=0)
 
         for col, label in enumerate(WEEKDAY_LABELS):
             x = col * CELL_SIZE + CELL_SIZE / 2
@@ -716,7 +721,6 @@ class HistoryPage(tk.Frame):
                     self._circle_images.append(ring_img)
                     self.canvas.create_image(cx - ring_d / 2, cy - ring_d / 2, anchor="nw", image=ring_img)
 
-                radius = value_to_radius(value, max_value)
                 tag = f"day{key.replace('-', '')}"
                 day_sets = daily_sets.get(key, [])
                 if day_sets:
@@ -730,12 +734,15 @@ class HistoryPage(tk.Frame):
                 else:
                     tooltip_text = f"{key}: keine Einträge"
 
-                diameter = radius * 2
                 if value > 0:
-                    color = value_to_color(value, max_value)
+                    radius = value_to_radius(value)
+                    color = value_to_color(value)
+                    diameter = radius * 2
                     day_img = render_circle(diameter, fill=color)
                     text_color = "#ffffff"
                 else:
+                    radius = EMPTY_DAY_RADIUS
+                    diameter = radius * 2
                     day_img = render_circle(diameter, outline=BORDER, outline_width=1)
                     text_color = TEXT_SECONDARY
                 self._circle_images.append(day_img)
