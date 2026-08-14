@@ -118,7 +118,7 @@ MAX_CIRCLE_RADIUS = 20  # Radius bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen 
 REPS_FOR_FULL_SIZE = 50  # Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
 MIN_RENDER_RADIUS = 2  # rein technischer Mindestwert (kein visueller Floor), verhindert ein 0px-Bild bei sehr kleinen aber >0 Werten
 
-CELL_SIZE = 34  # muss inkl. Padding in die 270px breite Buehne passen (7 Spalten)
+CELL_SIZE = 44  # muss inkl. Padding in die 340px breite Buehne passen (7 Spalten), Kreis-Durchmesser max. 40px (MAX_CIRCLE_RADIUS)
 HEADER_HEIGHT = 22
 CANVAS_WIDTH = CELL_SIZE * 7
 
@@ -767,7 +767,7 @@ class HistoryPage(tk.Frame):
         )
 
 
-WINDOW_WIDTH = 270
+WINDOW_WIDTH = 340
 WINDOW_HEIGHT = 552  # +32 gegenueber vorher, Platz fuer die Account-Zeile
 STAGE_HEIGHT = WINDOW_HEIGHT - TITLE_BAR_HEIGHT
 
@@ -884,7 +884,7 @@ class RepxoApp(tk.Tk):
 
         self.login_btn = RoundedButton(
             self.account_frame, text="☁  Mit Google anmelden", command=self.start_login,
-            width=214, height=32, radius=12, font=FONT_BUTTON_SMALL,
+            width=270, height=32, radius=12, font=FONT_BUTTON_SMALL,
             fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
             outline=BORDER, outline_width=1, bg_parent=BG_DARK,
         )
@@ -910,7 +910,7 @@ class RepxoApp(tk.Tk):
         self.login_error_label = tk.Label(
             self.account_frame, textvariable=self.login_error_var,
             font=(FONT_FAMILY, 8, "bold"), bg=BG_DARK, fg="#f87171",
-            wraplength=230, justify="center",
+            wraplength=290, justify="center",
         )
 
         self._update_account_ui()
@@ -940,14 +940,14 @@ class RepxoApp(tk.Tk):
         for delta in (1, 3, 5):
             RoundedButton(
                 btn_frame, text=f"+{delta}", command=lambda d=delta: self.add(d),
-                width=66, height=48, radius=16, font=FONT_BUTTON,
+                width=84, height=60, radius=16, font=FONT_BUTTON,
                 fill=ACCENT, hover=ACCENT_HOVER, text_color="#ffffff",
                 bg_parent=BG_DARK,
             ).pack(side="left", padx=5)
 
         self.finish_btn = RoundedButton(
             content, text="✓  Satz beenden", command=self.finish_set,
-            width=214, height=42, radius=16, font=FONT_BUTTON_SMALL,
+            width=270, height=42, radius=16, font=FONT_BUTTON_SMALL,
             fill=SUCCESS, hover=SUCCESS_HOVER, text_color="#ffffff",
             bg_parent=BG_DARK,
         )
@@ -964,7 +964,7 @@ class RepxoApp(tk.Tk):
         self.sets_today_var = tk.StringVar(value="–")
         tk.Label(
             content, textvariable=self.sets_today_var, font=FONT_SETS_VALUE,
-            bg=BG_DARK, fg=TEXT_PRIMARY, wraplength=220, justify="center",
+            bg=BG_DARK, fg=TEXT_PRIMARY, wraplength=280, justify="center",
         ).pack(pady=(2, 6))
 
         self.total_var = tk.StringVar(value=f"GESAMT  {self.data['total']}")
@@ -978,7 +978,7 @@ class RepxoApp(tk.Tk):
 
         self.undo_btn = RoundedButton(
             action_frame, text="↺  Rückgängig", command=self.undo,
-            width=126, height=38, radius=14, font=FONT_BUTTON_SMALL,
+            width=159, height=38, radius=14, font=FONT_BUTTON_SMALL,
             fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
             outline=BORDER, outline_width=1, bg_parent=BG_DARK,
         )
@@ -986,7 +986,7 @@ class RepxoApp(tk.Tk):
 
         RoundedButton(
             action_frame, text="📅  Verlauf", command=self.show_history,
-            width=100, height=38, radius=14, font=FONT_BUTTON_SMALL,
+            width=126, height=38, radius=14, font=FONT_BUTTON_SMALL,
             fill=ACCENT_DIM, hover=BORDER, text_color=ACCENT_HOVER,
             bg_parent=BG_DARK,
         ).pack(side="left")
