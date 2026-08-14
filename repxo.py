@@ -363,6 +363,26 @@ def login_with_google(client: Client):
     return auth_response.session
 
 
+def _virtual_screen_bounds() -> tuple[int, int, int, int]:
+    """Liefert (left, top, right, bottom) der gesamten virtuellen Anzeigeflaeche
+    ueber alle angeschlossenen Monitore hinweg (nicht nur den primaeren) -
+    fuer die Pruefung, ob eine gespeicherte Fensterposition noch erreichbar
+    ist. Bei einem Fehler (0,0,0,0), was als "nicht ermittelbar" behandelt wird."""
+    try:
+        SM_XVIRTUALSCREEN = 76
+        SM_YVIRTUALSCREEN = 77
+        SM_CXVIRTUALSCREEN = 78
+        SM_CYVIRTUALSCREEN = 79
+        user32 = ctypes.windll.user32
+        left = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+        top = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+        width = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+        height = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        return left, top, left + width, top + height
+    except Exception:
+        return 0, 0, 0, 0
+
+
 def ensure_taskbar_icon(window: tk.Misc) -> None:
     """Rahmenlose Fenster (overrideredirect) verschwinden unter Windows sonst
     aus der Taskleiste - das hier holt sie per WinAPI zurueck."""
@@ -780,24 +800,41 @@ class RepxoApp(tk.Tk):
         self.supabase = create_supabase_client()
         self.cloud_user = None
 
-        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}+{self._startup_x()}+{self._startup_y()}")
+        start_x, start_y = self._resolve_startup_position()
+        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}+{start_x}+{start_y}")
 
         self._build_ui()
         self.after(10, lambda: ensure_taskbar_icon(self))
         self._try_restore_session()
         self._run_async(fetch_latest_release, self._on_update_check_done)
 
-    def _startup_x(self) -> int:
-        saved = self.data.get("window")
-        if saved and "x" in saved:
-            return saved["x"]
-        return max(0, (self.winfo_screenwidth() - WINDOW_WIDTH) // 2)
+    def _resolve_startup_position(self) -> tuple[int, int]:
+        """Gespeicherte Fensterposition wiederherstellen - aber nur, wenn
+        davon noch genug auf einem tatsaechlich angeschlossenen Monitor
+        sichtbar waere. Sonst (z.B. Monitor seitdem abgesteckt) faellt die
+        Position sonst dauerhaft ausserhalb des Bildschirms und die App
+        waere unerreichbar - dann stattdessen auf dem Hauptbildschirm
+        zentrieren, wie beim allerersten Start."""
+        center_x = max(0, (self.winfo_screenwidth() - WINDOW_WIDTH) // 2)
+        center_y = max(0, (self.winfo_screenheight() - WINDOW_HEIGHT) // 2)
 
-    def _startup_y(self) -> int:
         saved = self.data.get("window")
-        if saved and "y" in saved:
-            return saved["y"]
-        return max(0, (self.winfo_screenheight() - WINDOW_HEIGHT) // 2)
+        if not saved or "x" not in saved or "y" not in saved:
+            return center_x, center_y
+
+        x, y = saved["x"], saved["y"]
+        left, top, right, bottom = _virtual_screen_bounds()
+        if right <= left or bottom <= top:
+            return x, y  # virtuelle Anzeigeflaeche nicht ermittelbar - ungeprueft uebernehmen
+
+        margin = 40  # mindestens so viel Titelleiste muss erreichbar sein
+        off_screen = (
+            x + WINDOW_WIDTH < left + margin
+            or x > right - margin
+            or y + TITLE_BAR_HEIGHT < top
+            or y > bottom - margin
+        )
+        return (center_x, center_y) if off_screen else (x, y)
 
     def _save_window_position(self) -> None:
         self.data["window"] = {"x": self.winfo_x(), "y": self.winfo_y()}
@@ -857,6 +894,17 @@ class RepxoApp(tk.Tk):
             fill=BG_DARK, hover=BG_CARD, text_color=ACCENT_HOVER,
             bg_parent=BG_DARK,
         ).pack(side="left")
+
+        # Fehlermeldung bei fehlgeschlagenem Login - standardmaessig nicht
+        # gepackt (nimmt keinen Platz weg), erscheint nur bei Bedarf. Ohne
+        # das war ein Login-Fehler bisher komplett unsichtbar (nur ein
+        # print(), das es in der gebauten .exe ohne Konsole nie zu sehen gibt).
+        self.login_error_var = tk.StringVar(value="")
+        self.login_error_label = tk.Label(
+            self.account_frame, textvariable=self.login_error_var,
+            font=(FONT_FAMILY, 8, "bold"), bg=BG_DARK, fg="#f87171",
+            wraplength=230, justify="center",
+        )
 
         self._update_account_ui()
 
@@ -999,9 +1047,14 @@ class RepxoApp(tk.Tk):
             cloud_row = self._fetch_cloud_row(session.user.id)
             return session, cloud_row
 
-        self._run_async(restore, self._on_login_done)
+        # silent=True: ein abgelaufener/ungueltiger gespeicherter Login beim
+        # stillen Hintergrund-Refresh ist normal (Token laeuft irgendwann
+        # ab) - dafuer keine Fehlermeldung zeigen, nur bei einem aktiven,
+        # vom Nutzer angestossenen Login-Versuch.
+        self._run_async(restore, lambda result: self._on_login_done(result, silent=True))
 
     def start_login(self) -> None:
+        self._hide_login_error()
         self.login_btn.set_enabled(False)
         self.login_btn.set_text("Öffne Browser…")
 
@@ -1012,14 +1065,24 @@ class RepxoApp(tk.Tk):
 
         self._run_async(do_login, self._on_login_done)
 
-    def _on_login_done(self, result: object) -> None:
+    def _show_login_error(self, message: str) -> None:
+        self.login_error_var.set(f"⚠ Login fehlgeschlagen: {message}")
+        self.login_error_label.pack(pady=(6, 0))
+
+    def _hide_login_error(self) -> None:
+        self.login_error_label.pack_forget()
+
+    def _on_login_done(self, result: object, silent: bool = False) -> None:
         self.login_btn.set_enabled(True)
         self.login_btn.set_text("☁  Mit Google anmelden")
 
         if isinstance(result, Exception):
-            print(f"Login fehlgeschlagen: {result}")
+            print(f"Login fehlgeschlagen: {result}", flush=True)
+            if not silent:
+                self._show_login_error(str(result))
             return
 
+        self._hide_login_error()
         session, cloud_row = result
         self.cloud_user = session.user
         save_session(session.refresh_token, session.user.email or "")
