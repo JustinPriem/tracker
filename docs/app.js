@@ -131,8 +131,10 @@ const accountEmail = document.getElementById("accountEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const MIN_CIRCLE_SIZE = 26;
-const MAX_CIRCLE_SIZE = 40;
+const MAX_CIRCLE_SIZE = 48; // Durchmesser in px bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen
+const REPS_FOR_FULL_SIZE = 50; // Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
+const MIN_RENDER_SIZE = 4; // rein technischer Mindestwert (kein visueller Floor), verhindert eine 0px-Flaeche bei sehr kleinen aber >0 Werten
+const EMPTY_DAY_SIZE = 26; // fester Durchmesser fuer den duennen Umriss-Kreis an Tagen ohne Eintraege (unveraendert ggue. vorher)
 
 let calendarDate = new Date();
 
@@ -229,10 +231,9 @@ function getDailySets() {
   return byDay;
 }
 
-function valueToSize(value, maxValue) {
-  if (!value || maxValue <= 0) return MIN_CIRCLE_SIZE;
-  const ratio = Math.min(value / maxValue, 1);
-  return Math.round(MIN_CIRCLE_SIZE + ratio * (MAX_CIRCLE_SIZE - MIN_CIRCLE_SIZE));
+function valueToSize(value) {
+  const ratio = Math.min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE;
+  return Math.max(MIN_RENDER_SIZE, Math.round(ratio * MAX_CIRCLE_SIZE));
 }
 
 function hexToRgb(hex) {
@@ -241,11 +242,11 @@ function hexToRgb(hex) {
   return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
 }
 
-function valueToColor(value, maxValue) {
+function valueToColor(value) {
   const styles = getComputedStyle(document.documentElement);
   const low = hexToRgb(styles.getPropertyValue("--heat-low") || "#3a1f14");
   const high = hexToRgb(styles.getPropertyValue("--heat-high") || "#ff5722");
-  const ratio = maxValue > 0 ? Math.min(value / maxValue, 1) : 1;
+  const ratio = Math.min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE;
   const rgb = low.map((start, i) => Math.round(start + (high[i] - start) * ratio));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
@@ -255,7 +256,6 @@ function renderCalendar() {
   const monthIndex = calendarDate.getMonth();
   const totals = getDailyTotals();
   const dailySets = getDailySets();
-  const maxValue = Object.values(totals).length ? Math.max(...Object.values(totals)) : 0;
 
   calendarTitle.textContent = calendarDate.toLocaleDateString("de-DE", {
     month: "long",
@@ -288,7 +288,7 @@ function renderCalendar() {
     cell.className = "day-cell" + (key === todayK ? " today" : "");
 
     const circle = document.createElement("div");
-    const size = valueToSize(value, maxValue);
+    const size = value > 0 ? valueToSize(value) : EMPTY_DAY_SIZE;
     circle.style.width = `${size}px`;
     circle.style.height = `${size}px`;
 
@@ -306,7 +306,7 @@ function renderCalendar() {
 
     if (value > 0) {
       circle.className = "day-circle";
-      circle.style.background = valueToColor(value, maxValue);
+      circle.style.background = valueToColor(value);
     } else {
       circle.className = "day-circle no-data";
     }
