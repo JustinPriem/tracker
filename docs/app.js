@@ -452,7 +452,7 @@ const isNativeApp = !!(
   window.Capacitor.isNativePlatform()
 );
 
-// --- Auto-Update-Check (nur native Android-App, gegen GitHub Releases) ---
+// --- Download-Versionen anzeigen + Auto-Update-Check (gegen GitHub Releases) ---
 
 const updateBanner = document.getElementById("updateBanner");
 let updateUrl = null;
@@ -475,10 +475,16 @@ function isNewerVersion(remote, local) {
   return false;
 }
 
+function showDownloadVersions(version) {
+  // Haengt die aktuelle Release-Version an jeden Download-Untertitel in der
+  // Sidebar an (z.B. "Installer (.exe) · v1.1.0"), damit auf der Website
+  // immer sichtbar ist, welche Version gerade zum Download bereitsteht.
+  document.querySelectorAll(".download-sub").forEach((el) => {
+    el.textContent = `${el.textContent} · ${version}`;
+  });
+}
+
 async function checkForUpdate() {
-  // Die Website ist ueber GitHub Pages immer aktuell - die Pruefung ist nur
-  // fuer die native App relevant, deren Inhalte fest in der APK stecken.
-  if (!isNativeApp) return;
   try {
     const res = await fetch(LATEST_RELEASE_API_URL, {
       headers: { Accept: "application/vnd.github+json" },
@@ -486,7 +492,11 @@ async function checkForUpdate() {
     if (!res.ok) return;
     const release = await res.json();
     const latest = release.tag_name || "";
-    if (latest && isNewerVersion(latest, APP_VERSION)) {
+    if (latest) showDownloadVersions(latest);
+    // Der Update-Hinweis-Banner ist nur fuer die native App relevant, deren
+    // Inhalte fest in der APK stecken - die Website selbst ist ueber
+    // GitHub Pages ohnehin immer aktuell.
+    if (isNativeApp && latest && isNewerVersion(latest, APP_VERSION)) {
       updateUrl = release.html_url;
       updateBanner.textContent = `🔄 Update ${latest} verfügbar`;
       updateBanner.hidden = false;
