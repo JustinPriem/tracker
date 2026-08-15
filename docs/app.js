@@ -310,7 +310,7 @@ function renderCalendar() {
     } else {
       circle.className = "day-circle no-data";
     }
-    circle.title = tooltipText;
+    circle.dataset.tooltip = tooltipText;
     circle.textContent = String(day);
     cell.appendChild(circle);
 
@@ -319,6 +319,55 @@ function renderCalendar() {
 
   historySummary.textContent = `DIESEN MONAT ${monthTotal}      GESAMT ${data.total}`;
 }
+
+const dayTooltip = document.createElement("div");
+dayTooltip.className = "day-tooltip";
+document.body.appendChild(dayTooltip);
+let tooltipHideTimer = null;
+
+function showDayTooltip(circleEl) {
+  const text = circleEl.dataset.tooltip;
+  if (!text) return;
+  clearTimeout(tooltipHideTimer);
+  dayTooltip.textContent = text;
+  const rect = circleEl.getBoundingClientRect();
+  dayTooltip.style.left = `${rect.left + rect.width / 2}px`;
+  dayTooltip.style.top = `${rect.top - 8}px`;
+  dayTooltip.classList.add("visible");
+}
+
+function hideDayTooltip() {
+  dayTooltip.classList.remove("visible");
+}
+
+// mouseover/mouseout statt mouseenter/mouseleave, damit ein einziger
+// Listener auf calendarGrid reicht (Delegation) - calendarGrid.innerHTML
+// wird bei jedem renderCalendar() neu aufgebaut, pro-Kreis-Listener
+// muessten sonst bei jedem Rendern neu gebunden werden.
+calendarGrid.addEventListener("mouseover", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (circle) showDayTooltip(circle);
+});
+
+calendarGrid.addEventListener("mouseout", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (circle) hideDayTooltip();
+});
+
+// Tap-Support (Android/Touch): ein Klick auf einen Tag zeigt den Tooltip
+// kurz an. Browser synthetisieren bei einem Tap automatisch ein "click"-
+// Event, ein separater "touchstart"-Handler ist daher nicht noetig.
+calendarGrid.addEventListener("click", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (!circle) return;
+  showDayTooltip(circle);
+  tooltipHideTimer = setTimeout(hideDayTooltip, 2500);
+});
+
+// Tap ausserhalb eines Tages schliesst den Tooltip sofort.
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".day-circle")) hideDayTooltip();
+});
 
 document.querySelectorAll(".btn-add").forEach((btn) => {
   btn.addEventListener("click", () => addDelta(Number(btn.dataset.delta)));

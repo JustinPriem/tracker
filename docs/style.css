@@ -576,6 +576,32 @@ dialog h2 {
   color: var(--muted);
 }
 
+.day-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.4;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -100%);
+  transition: opacity 0.12s ease;
+}
+
+.day-tooltip.visible {
+  opacity: 1;
+}
+
 .day-cell.today .day-circle {
   box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px #f5f6f7;
 }
