@@ -134,7 +134,7 @@ const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const MAX_CIRCLE_SIZE = 48; // Durchmesser in px bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen
 const REPS_FOR_FULL_SIZE = 50; // Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
 const MIN_RENDER_SIZE = 4; // rein technischer Mindestwert (kein visueller Floor), verhindert eine 0px-Flaeche bei sehr kleinen aber >0 Werten
-const EMPTY_DAY_SIZE = 26; // fester Durchmesser fuer den duennen Umriss-Kreis an Tagen ohne Eintraege (unveraendert ggue. vorher)
+const EMPTY_DAY_SIZE = MIN_RENDER_SIZE; // Tage ohne Eintraege sind exakt so klein wie der kleinstmoegliche reale Wert - nie kleiner UND nie groesser als ein trainierter Tag
 
 let calendarDate = new Date();
 
@@ -289,8 +289,13 @@ function renderCalendar() {
 
     const circle = document.createElement("div");
     const size = value > 0 ? valueToSize(value) : EMPTY_DAY_SIZE;
-    circle.style.width = `${size}px`;
-    circle.style.height = `${size}px`;
+    // Als Prozent der Zelle statt fixer px setzen, damit der Kreis auf
+    // schmalen Handy-Breiten automatisch mitschrumpft (sonst ueberragt ein
+    // 48px-Kreis die Spaltenbreite bei allem < ca. 440px Viewport-Breite).
+    // .day-circle begrenzt per aspect-ratio/max-width in CSS die absolute
+    // Obergrenze auf MAX_CIRCLE_SIZE, damit "100%" auf breiten Screens
+    // nicht groesser als der eigentlich beabsichtigte Maximalwert wird.
+    circle.style.width = `${(size / MAX_CIRCLE_SIZE) * 100}%`;
 
     const daySets = dailySets[key] || [];
     let tooltipText;
@@ -311,6 +316,7 @@ function renderCalendar() {
       circle.className = "day-circle no-data";
     }
     circle.dataset.tooltip = tooltipText;
+    circle.setAttribute("aria-label", tooltipText);
     circle.textContent = String(day);
     cell.appendChild(circle);
 
@@ -331,9 +337,17 @@ function showDayTooltip(circleEl) {
   clearTimeout(tooltipHideTimer);
   dayTooltip.textContent = text;
   const rect = circleEl.getBoundingClientRect();
-  dayTooltip.style.left = `${rect.left + rect.width / 2}px`;
+  const centerX = rect.left + rect.width / 2;
+  dayTooltip.style.left = `${centerX}px`;
   dayTooltip.style.top = `${rect.top - 8}px`;
   dayTooltip.classList.add("visible");
+  // Erst nach dem Sichtbarmachen messen (Breite haengt vom gerade erst
+  // gesetzten Textinhalt ab) und horizontal an den Viewport-Rand klemmen -
+  // auf schmalen Handy-Breiten wuerde die Box sonst links/rechts
+  // abgeschnitten aus dem Bildschirm ragen.
+  const half = dayTooltip.offsetWidth / 2;
+  const clampedX = Math.min(Math.max(centerX, half + 4), window.innerWidth - half - 4);
+  dayTooltip.style.left = `${clampedX}px`;
 }
 
 function hideDayTooltip() {
@@ -368,6 +382,11 @@ calendarGrid.addEventListener("click", (event) => {
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".day-circle")) hideDayTooltip();
 });
+
+// Beim Schliessen des Dialogs (Escape, Klick auf "Schliessen", ...) auch
+// einen gerade sichtbaren Tooltip zuruecksetzen, sonst blitzt er beim
+// naechsten Oeffnen kurz an der alten Stelle auf.
+historyDialog.addEventListener("close", hideDayTooltip);
 
 document.querySelectorAll(".btn-add").forEach((btn) => {
   btn.addEventListener("click", () => addDelta(Number(btn.dataset.delta)));

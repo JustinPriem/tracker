@@ -562,6 +562,8 @@ dialog h2 {
   display: flex;
   align-items: center;
   justify-content: center;
+  aspect-ratio: 1;
+  max-width: 48px;
   border-radius: 50%;
   flex-shrink: 0;
   font-size: 0.75rem;
@@ -581,6 +583,7 @@ dialog h2 {
   left: 0;
   top: 0;
   z-index: 50;
+  max-width: calc(100vw - 16px);
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;

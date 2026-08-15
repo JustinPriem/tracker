@@ -113,10 +113,10 @@ MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
-EMPTY_DAY_RADIUS = 10  # fester Radius fuer den duennen Umriss-Kreis an Tagen ohne Eintraege (unveraendert ggue. vorher)
+MIN_RENDER_RADIUS = 2  # rein technischer Mindestwert (kein visueller Floor), verhindert ein 0px-Bild bei sehr kleinen aber >0 Werten
+EMPTY_DAY_RADIUS = MIN_RENDER_RADIUS  # Tage ohne Eintraege sind exakt so klein wie der kleinstmoegliche reale Wert - nie kleiner UND nie groesser als ein trainierter Tag (sonst wirkt ein Ruhetag groesser/"mehr" als ein trainierter Tag)
 MAX_CIRCLE_RADIUS = 20  # Radius bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen - volle Groesse (Durchmesser 40px)
 REPS_FOR_FULL_SIZE = 50  # Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
-MIN_RENDER_RADIUS = 2  # rein technischer Mindestwert (kein visueller Floor), verhindert ein 0px-Bild bei sehr kleinen aber >0 Werten
 
 CELL_SIZE = 44  # muss inkl. Padding in die 340px breite Buehne passen (7 Spalten), Kreis-Durchmesser max. 40px (MAX_CIRCLE_RADIUS)
 HEADER_HEIGHT = 22
@@ -715,12 +715,6 @@ class HistoryPage(tk.Frame):
                 top = HEADER_HEIGHT + row * CELL_SIZE
                 cy = top + CELL_SIZE / 2
 
-                if key == today_iso:
-                    ring_d = (MAX_CIRCLE_RADIUS + 3) * 2
-                    ring_img = render_circle(ring_d, outline="#f5f6f7", outline_width=2)
-                    self._circle_images.append(ring_img)
-                    self.canvas.create_image(cx - ring_d / 2, cy - ring_d / 2, anchor="nw", image=ring_img)
-
                 tag = f"day{key.replace('-', '')}"
                 day_sets = daily_sets.get(key, [])
                 if day_sets:
@@ -745,6 +739,13 @@ class HistoryPage(tk.Frame):
                     diameter = radius * 2
                     day_img = render_circle(diameter, outline=BORDER, outline_width=1)
                     text_color = TEXT_SECONDARY
+
+                if key == today_iso:
+                    ring_d = (radius + 3) * 2
+                    ring_img = render_circle(ring_d, outline="#f5f6f7", outline_width=2)
+                    self._circle_images.append(ring_img)
+                    self.canvas.create_image(cx - ring_d / 2, cy - ring_d / 2, anchor="nw", image=ring_img)
+
                 self._circle_images.append(day_img)
                 self.canvas.create_image(
                     cx - radius, cy - radius, anchor="nw", image=day_img, tags=(tag,),
