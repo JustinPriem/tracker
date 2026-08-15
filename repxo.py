@@ -113,10 +113,12 @@ MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
-MIN_CIRCLE_RADIUS = 10
-MAX_CIRCLE_RADIUS = 15
+MIN_RENDER_RADIUS = 2  # rein technischer Mindestwert (kein visueller Floor), verhindert ein 0px-Bild bei sehr kleinen aber >0 Werten
+EMPTY_DAY_RADIUS = MIN_RENDER_RADIUS  # Tage ohne Eintraege sind exakt so klein wie der kleinstmoegliche reale Wert - nie kleiner UND nie groesser als ein trainierter Tag (sonst wirkt ein Ruhetag groesser/"mehr" als ein trainierter Tag)
+MAX_CIRCLE_RADIUS = 20  # Radius bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen - volle Groesse (Durchmesser 40px)
+REPS_FOR_FULL_SIZE = 50  # Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
 
-CELL_SIZE = 34  # muss inkl. Padding in die 270px breite Buehne passen (7 Spalten)
+CELL_SIZE = 44  # muss inkl. Padding in die 340px breite Buehne passen (7 Spalten), Kreis-Durchmesser max. 40px (MAX_CIRCLE_RADIUS)
 HEADER_HEIGHT = 22
 CANVAS_WIDTH = CELL_SIZE * 7
 
@@ -221,19 +223,23 @@ def render_circle(
     return ImageTk.PhotoImage(img)
 
 
-def value_to_radius(value: int, max_value: int) -> int:
-    """Bestimmt den Kreisradius abhaengig von der Tages-Anzahl."""
-    if not value or max_value <= 0:
-        return MIN_CIRCLE_RADIUS
-    ratio = min(value / max_value, 1)
-    return round(MIN_CIRCLE_RADIUS + ratio * (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS))
+def value_to_radius(value: int) -> int:
+    """Bestimmt den Kreisradius anhand einer absoluten Skala: bei
+    REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen an einem Tag ist der Kreis
+    auf 100% (MAX_CIRCLE_RADIUS), linear interpoliert darunter - bewusst
+    OHNE sichtbaren Mindestwert (nur MIN_RENDER_RADIUS als rein technische
+    Untergrenze gegen ein 0px-Bild). Nur fuer value > 0 aufrufen - Tage
+    ohne Eintraege nutzen stattdessen direkt EMPTY_DAY_RADIUS."""
+    ratio = min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE
+    return max(MIN_RENDER_RADIUS, round(ratio * MAX_CIRCLE_RADIUS))
 
 
-def value_to_color(value: int, max_value: int) -> str:
-    """Interpoliert zwischen gedaempftem und leuchtendem Orange (Heatmap-Look)."""
+def value_to_color(value: int) -> str:
+    """Interpoliert zwischen gedaempftem und leuchtendem Orange (Heatmap-Look),
+    auf derselben absoluten REPS_FOR_FULL_SIZE-Skala wie value_to_radius."""
     low = (58, 31, 20)      # dunkles Glut-Orange
     high = (255, 87, 34)    # helles Flammen-Orange (ACCENT)
-    ratio = min(value / max_value, 1) if max_value > 0 else 1
+    ratio = min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE
     rgb = tuple(round(lo + (hi - lo) * ratio) for lo, hi in zip(low, high))
     return "#%02x%02x%02x" % rgb
 
@@ -684,7 +690,6 @@ class HistoryPage(tk.Frame):
 
         daily_totals = self._daily_totals()
         daily_sets = self._daily_sets()
-        max_value = max(daily_totals.values(), default=0)
 
         for col, label in enumerate(WEEKDAY_LABELS):
             x = col * CELL_SIZE + CELL_SIZE / 2
@@ -710,13 +715,6 @@ class HistoryPage(tk.Frame):
                 top = HEADER_HEIGHT + row * CELL_SIZE
                 cy = top + CELL_SIZE / 2
 
-                if key == today_iso:
-                    ring_d = (MAX_CIRCLE_RADIUS + 3) * 2
-                    ring_img = render_circle(ring_d, outline="#f5f6f7", outline_width=2)
-                    self._circle_images.append(ring_img)
-                    self.canvas.create_image(cx - ring_d / 2, cy - ring_d / 2, anchor="nw", image=ring_img)
-
-                radius = value_to_radius(value, max_value)
                 tag = f"day{key.replace('-', '')}"
                 day_sets = daily_sets.get(key, [])
                 if day_sets:
@@ -730,14 +728,24 @@ class HistoryPage(tk.Frame):
                 else:
                     tooltip_text = f"{key}: keine Einträge"
 
-                diameter = radius * 2
                 if value > 0:
-                    color = value_to_color(value, max_value)
+                    radius = value_to_radius(value)
+                    color = value_to_color(value)
+                    diameter = radius * 2
                     day_img = render_circle(diameter, fill=color)
                     text_color = "#ffffff"
                 else:
+                    radius = EMPTY_DAY_RADIUS
+                    diameter = radius * 2
                     day_img = render_circle(diameter, outline=BORDER, outline_width=1)
                     text_color = TEXT_SECONDARY
+
+                if key == today_iso:
+                    ring_d = (radius + 3) * 2
+                    ring_img = render_circle(ring_d, outline="#f5f6f7", outline_width=2)
+                    self._circle_images.append(ring_img)
+                    self.canvas.create_image(cx - ring_d / 2, cy - ring_d / 2, anchor="nw", image=ring_img)
+
                 self._circle_images.append(day_img)
                 self.canvas.create_image(
                     cx - radius, cy - radius, anchor="nw", image=day_img, tags=(tag,),
@@ -760,7 +768,7 @@ class HistoryPage(tk.Frame):
         )
 
 
-WINDOW_WIDTH = 270
+WINDOW_WIDTH = 340
 WINDOW_HEIGHT = 552  # +32 gegenueber vorher, Platz fuer die Account-Zeile
 STAGE_HEIGHT = WINDOW_HEIGHT - TITLE_BAR_HEIGHT
 
@@ -877,7 +885,7 @@ class RepxoApp(tk.Tk):
 
         self.login_btn = RoundedButton(
             self.account_frame, text="☁  Mit Google anmelden", command=self.start_login,
-            width=214, height=32, radius=12, font=FONT_BUTTON_SMALL,
+            width=270, height=32, radius=12, font=FONT_BUTTON_SMALL,
             fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
             outline=BORDER, outline_width=1, bg_parent=BG_DARK,
         )
@@ -903,7 +911,7 @@ class RepxoApp(tk.Tk):
         self.login_error_label = tk.Label(
             self.account_frame, textvariable=self.login_error_var,
             font=(FONT_FAMILY, 8, "bold"), bg=BG_DARK, fg="#f87171",
-            wraplength=230, justify="center",
+            wraplength=290, justify="center",
         )
 
         self._update_account_ui()
@@ -933,14 +941,14 @@ class RepxoApp(tk.Tk):
         for delta in (1, 3, 5):
             RoundedButton(
                 btn_frame, text=f"+{delta}", command=lambda d=delta: self.add(d),
-                width=66, height=48, radius=16, font=FONT_BUTTON,
+                width=84, height=60, radius=16, font=FONT_BUTTON,
                 fill=ACCENT, hover=ACCENT_HOVER, text_color="#ffffff",
                 bg_parent=BG_DARK,
             ).pack(side="left", padx=5)
 
         self.finish_btn = RoundedButton(
             content, text="✓  Satz beenden", command=self.finish_set,
-            width=214, height=42, radius=16, font=FONT_BUTTON_SMALL,
+            width=270, height=42, radius=16, font=FONT_BUTTON_SMALL,
             fill=SUCCESS, hover=SUCCESS_HOVER, text_color="#ffffff",
             bg_parent=BG_DARK,
         )
@@ -957,7 +965,7 @@ class RepxoApp(tk.Tk):
         self.sets_today_var = tk.StringVar(value="–")
         tk.Label(
             content, textvariable=self.sets_today_var, font=FONT_SETS_VALUE,
-            bg=BG_DARK, fg=TEXT_PRIMARY, wraplength=220, justify="center",
+            bg=BG_DARK, fg=TEXT_PRIMARY, wraplength=280, justify="center",
         ).pack(pady=(2, 6))
 
         self.total_var = tk.StringVar(value=f"GESAMT  {self.data['total']}")
@@ -971,7 +979,7 @@ class RepxoApp(tk.Tk):
 
         self.undo_btn = RoundedButton(
             action_frame, text="↺  Rückgängig", command=self.undo,
-            width=126, height=38, radius=14, font=FONT_BUTTON_SMALL,
+            width=159, height=38, radius=14, font=FONT_BUTTON_SMALL,
             fill=BG_DARK, hover=BG_CARD, text_color=TEXT_SECONDARY,
             outline=BORDER, outline_width=1, bg_parent=BG_DARK,
         )
@@ -979,7 +987,7 @@ class RepxoApp(tk.Tk):
 
         RoundedButton(
             action_frame, text="📅  Verlauf", command=self.show_history,
-            width=100, height=38, radius=14, font=FONT_BUTTON_SMALL,
+            width=126, height=38, radius=14, font=FONT_BUTTON_SMALL,
             fill=ACCENT_DIM, hover=BORDER, text_color=ACCENT_HOVER,
             bg_parent=BG_DARK,
         ).pack(side="left")

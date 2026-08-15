@@ -131,8 +131,10 @@ const accountEmail = document.getElementById("accountEmail");
 const logoutBtn = document.getElementById("logoutBtn");
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const MIN_CIRCLE_SIZE = 26;
-const MAX_CIRCLE_SIZE = 40;
+const MAX_CIRCLE_SIZE = 48; // Durchmesser in px bei REPS_FOR_FULL_SIZE (oder mehr) Klimmzuegen
+const REPS_FOR_FULL_SIZE = 50; // Ab dieser Tages-Anzahl ist der Kreis auf 100% (volle Groesse)
+const MIN_RENDER_SIZE = 4; // rein technischer Mindestwert (kein visueller Floor), verhindert eine 0px-Flaeche bei sehr kleinen aber >0 Werten
+const EMPTY_DAY_SIZE = MIN_RENDER_SIZE; // Tage ohne Eintraege sind exakt so klein wie der kleinstmoegliche reale Wert - nie kleiner UND nie groesser als ein trainierter Tag
 
 let calendarDate = new Date();
 
@@ -229,10 +231,9 @@ function getDailySets() {
   return byDay;
 }
 
-function valueToSize(value, maxValue) {
-  if (!value || maxValue <= 0) return MIN_CIRCLE_SIZE;
-  const ratio = Math.min(value / maxValue, 1);
-  return Math.round(MIN_CIRCLE_SIZE + ratio * (MAX_CIRCLE_SIZE - MIN_CIRCLE_SIZE));
+function valueToSize(value) {
+  const ratio = Math.min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE;
+  return Math.max(MIN_RENDER_SIZE, Math.round(ratio * MAX_CIRCLE_SIZE));
 }
 
 function hexToRgb(hex) {
@@ -241,11 +242,11 @@ function hexToRgb(hex) {
   return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
 }
 
-function valueToColor(value, maxValue) {
+function valueToColor(value) {
   const styles = getComputedStyle(document.documentElement);
   const low = hexToRgb(styles.getPropertyValue("--heat-low") || "#3a1f14");
   const high = hexToRgb(styles.getPropertyValue("--heat-high") || "#ff5722");
-  const ratio = maxValue > 0 ? Math.min(value / maxValue, 1) : 1;
+  const ratio = Math.min(value, REPS_FOR_FULL_SIZE) / REPS_FOR_FULL_SIZE;
   const rgb = low.map((start, i) => Math.round(start + (high[i] - start) * ratio));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
@@ -255,7 +256,6 @@ function renderCalendar() {
   const monthIndex = calendarDate.getMonth();
   const totals = getDailyTotals();
   const dailySets = getDailySets();
-  const maxValue = Object.values(totals).length ? Math.max(...Object.values(totals)) : 0;
 
   calendarTitle.textContent = calendarDate.toLocaleDateString("de-DE", {
     month: "long",
@@ -288,9 +288,14 @@ function renderCalendar() {
     cell.className = "day-cell" + (key === todayK ? " today" : "");
 
     const circle = document.createElement("div");
-    const size = valueToSize(value, maxValue);
-    circle.style.width = `${size}px`;
-    circle.style.height = `${size}px`;
+    const size = value > 0 ? valueToSize(value) : EMPTY_DAY_SIZE;
+    // Als Prozent der Zelle statt fixer px setzen, damit der Kreis auf
+    // schmalen Handy-Breiten automatisch mitschrumpft (sonst ueberragt ein
+    // 48px-Kreis die Spaltenbreite bei allem < ca. 440px Viewport-Breite).
+    // .day-circle begrenzt per aspect-ratio/max-width in CSS die absolute
+    // Obergrenze auf MAX_CIRCLE_SIZE, damit "100%" auf breiten Screens
+    // nicht groesser als der eigentlich beabsichtigte Maximalwert wird.
+    circle.style.width = `${(size / MAX_CIRCLE_SIZE) * 100}%`;
 
     const daySets = dailySets[key] || [];
     let tooltipText;
@@ -306,11 +311,12 @@ function renderCalendar() {
 
     if (value > 0) {
       circle.className = "day-circle";
-      circle.style.background = valueToColor(value, maxValue);
+      circle.style.background = valueToColor(value);
     } else {
       circle.className = "day-circle no-data";
     }
-    circle.title = tooltipText;
+    circle.dataset.tooltip = tooltipText;
+    circle.setAttribute("aria-label", tooltipText);
     circle.textContent = String(day);
     cell.appendChild(circle);
 
@@ -319,6 +325,68 @@ function renderCalendar() {
 
   historySummary.textContent = `DIESEN MONAT ${monthTotal}      GESAMT ${data.total}`;
 }
+
+const dayTooltip = document.createElement("div");
+dayTooltip.className = "day-tooltip";
+historyDialog.appendChild(dayTooltip);
+let tooltipHideTimer = null;
+
+function showDayTooltip(circleEl) {
+  const text = circleEl.dataset.tooltip;
+  if (!text) return;
+  clearTimeout(tooltipHideTimer);
+  dayTooltip.textContent = text;
+  const rect = circleEl.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  dayTooltip.style.left = `${centerX}px`;
+  dayTooltip.style.top = `${rect.top - 8}px`;
+  dayTooltip.classList.add("visible");
+  // Erst nach dem Sichtbarmachen messen (Breite haengt vom gerade erst
+  // gesetzten Textinhalt ab) und horizontal an den Viewport-Rand klemmen -
+  // auf schmalen Handy-Breiten wuerde die Box sonst links/rechts
+  // abgeschnitten aus dem Bildschirm ragen.
+  const half = dayTooltip.offsetWidth / 2;
+  const clampedX = Math.min(Math.max(centerX, half + 4), window.innerWidth - half - 4);
+  dayTooltip.style.left = `${clampedX}px`;
+}
+
+function hideDayTooltip() {
+  dayTooltip.classList.remove("visible");
+}
+
+// mouseover/mouseout statt mouseenter/mouseleave, damit ein einziger
+// Listener auf calendarGrid reicht (Delegation) - calendarGrid.innerHTML
+// wird bei jedem renderCalendar() neu aufgebaut, pro-Kreis-Listener
+// muessten sonst bei jedem Rendern neu gebunden werden.
+calendarGrid.addEventListener("mouseover", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (circle) showDayTooltip(circle);
+});
+
+calendarGrid.addEventListener("mouseout", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (circle) hideDayTooltip();
+});
+
+// Tap-Support (Android/Touch): ein Klick auf einen Tag zeigt den Tooltip
+// kurz an. Browser synthetisieren bei einem Tap automatisch ein "click"-
+// Event, ein separater "touchstart"-Handler ist daher nicht noetig.
+calendarGrid.addEventListener("click", (event) => {
+  const circle = event.target.closest(".day-circle");
+  if (!circle) return;
+  showDayTooltip(circle);
+  tooltipHideTimer = setTimeout(hideDayTooltip, 2500);
+});
+
+// Tap ausserhalb eines Tages schliesst den Tooltip sofort.
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".day-circle")) hideDayTooltip();
+});
+
+// Beim Schliessen des Dialogs (Escape, Klick auf "Schliessen", ...) auch
+// einen gerade sichtbaren Tooltip zuruecksetzen, sonst blitzt er beim
+// naechsten Oeffnen kurz an der alten Stelle auf.
+historyDialog.addEventListener("close", hideDayTooltip);
 
 document.querySelectorAll(".btn-add").forEach((btn) => {
   btn.addEventListener("click", () => addDelta(Number(btn.dataset.delta)));
