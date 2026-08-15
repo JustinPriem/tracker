@@ -564,6 +564,7 @@ dialog h2 {
   justify-content: center;
   aspect-ratio: 1;
   max-width: 48px;
+  min-height: 0;
   border-radius: 50%;
   flex-shrink: 0;
   font-size: 0.75rem;
