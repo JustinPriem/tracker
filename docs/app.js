@@ -322,7 +322,7 @@ function renderCalendar() {
 
 const dayTooltip = document.createElement("div");
 dayTooltip.className = "day-tooltip";
-document.body.appendChild(dayTooltip);
+historyDialog.appendChild(dayTooltip);
 let tooltipHideTimer = null;
 
 function showDayTooltip(circleEl) {
