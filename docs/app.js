@@ -20,7 +20,7 @@ const LEGACY_STORAGE_KEY = "pullupTrackerData"; // vor dem Rebranding zu Repxo
 // der nativen Android-App verwendet (siehe checkForUpdate unten), die
 // Website selbst ist ueber GitHub Pages ohnehin immer aktuell.
 const APP_VERSION = "1.1.0";
-const LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/tracker/releases/latest";
+const LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/repxo/releases/latest";
 
 const SUPABASE_URL = "https://yfqatrurllwgegoytgbn.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6ebvJQzvg2_Tf-COMSAPXw_feGjsNE0";

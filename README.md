@@ -13,9 +13,9 @@ GitHub Pages) – alle mit identischem Funktionsumfang und Design.
 
 **📥 Downloads** (auf der Website links in der Sidebar, am Handy im
 Seitenmenü – oder direkt hier):
-[Windows-Installer](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Setup.exe) ·
-[Windows portable ZIP](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo-Windows.zip) ·
-[Android APK](https://github.com/JustinPriem/tracker/releases/latest/download/Repxo.apk)
+[Windows-Installer](https://github.com/JustinPriem/repxo/releases/latest/download/Repxo-Setup.exe) ·
+[Windows portable ZIP](https://github.com/JustinPriem/repxo/releases/latest/download/Repxo-Windows.zip) ·
+[Android APK](https://github.com/JustinPriem/repxo/releases/latest/download/Repxo.apk)
 
 ## Funktionen
 
@@ -93,7 +93,7 @@ synchronisiert (Desktop + Browser, gleiches Konto). Technisch:
 ### Automatische Update-Prüfung
 
 Beim Start prüft die App im Hintergrund den neuesten
-[GitHub-Release](https://github.com/JustinPriem/tracker/releases/latest)
+[GitHub-Release](https://github.com/JustinPriem/repxo/releases/latest)
 gegen die eigene Version. Gibt es eine neuere, erscheint unten ein kleiner
 Hinweis "🔄 Update x.y.z verfügbar" – ein Klick öffnet die Release-Seite
 im Browser, von wo aus sich der neue Installer/ZIP herunterladen lässt.
@@ -162,7 +162,7 @@ Testen nötig.
    git push origin v1.2.0
    ```
 3. Der Workflow baut alles und legt ein neues Release
-   `https://github.com/JustinPriem/tracker/releases/tag/v1.2.0` mit allen
+   `https://github.com/JustinPriem/repxo/releases/tag/v1.2.0` mit allen
    drei Dateien an. Die Auto-Update-Prüfung (siehe oben) findet es dann
    automatisch.
 
@@ -235,7 +235,7 @@ Gerät verfügbar (siehe "Cloud-Sync" oben bei der Desktop-Version).
 3. Bei **Source** "Deploy from a branch" wählen
 4. Branch **`main`**, Ordner **`/docs`** auswählen und speichern
 5. Nach kurzer Zeit ist die Seite erreichbar unter:
-   `https://justinpriem.github.io/tracker/`
+   `https://justinpriem.github.io/repxo/`
 
 ### Lokal testen
 

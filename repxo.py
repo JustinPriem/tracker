@@ -41,7 +41,7 @@ APP_NAME = "Repxo"
 APP_VERSION = "1.1.0"
 
 # --- Auto-Update-Check (gegen GitHub Releases) --------------------------
-LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/tracker/releases/latest"
+LATEST_RELEASE_API_URL = "https://api.github.com/repos/JustinPriem/repxo/releases/latest"
 UPDATE_CHECK_TIMEOUT = 4  # Sekunden
 
 DATA_DIR = Path.home() / ".repxo"

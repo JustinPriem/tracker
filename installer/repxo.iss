@@ -13,7 +13,7 @@
 #define MyAppVersion "1.1.0"
 #define MyAppPublisher "Justin Priem"
 #define MyAppExeName "Repxo.exe"
-#define MyAppURL "https://github.com/JustinPriem/tracker"
+#define MyAppURL "https://github.com/JustinPriem/repxo"
 
 [Setup]
 ; Fest vergebene AppId, NICHT aendern - sonst erkennt Windows Updates nicht
